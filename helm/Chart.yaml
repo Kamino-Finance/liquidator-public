@@ -1,0 +1,9 @@
+apiVersion: v2
+name: kamino-lending-liquidations-bot
+description: Kamino Lending Liquidations Bot
+type: application
+version: 0.0.1
+dependencies:
+  - name: service-base-chart
+    version: 0.0.1
+    repository: "@hubbleprotocol"

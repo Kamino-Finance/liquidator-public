@@ -1,0 +1,99 @@
+name: Kamino Liquidations Bot Adaptor Docker Build
+
+on:
+  push:
+    branches:
+      - master
+jobs:
+  build_docker:
+    runs-on: ubuntu-latest
+    outputs:
+      build_version: ${{ steps.set_versions.outputs.build_version }}
+      release_version: ${{ steps.set_versions.outputs.release_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Set up Docker buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+      - name: Set versions
+        id: set_versions
+        shell: bash
+        run: ./.github/scripts/set-node-versions.sh
+      - name: Docker build API
+        id: docker_build
+        uses: docker/build-push-action@v3
+        with: 
+          file: ./Dockerfile
+          tags: hubbleprotocol/kamino-lending-liquidations-bot:${{ steps.set_versions.outputs.build_version }}
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha, mode=min
+  build_helm: 
+    needs: build_docker
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Set up Docker buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Helm build
+        id: helm_build
+        uses: docker/build-push-action@v3
+        with: 
+          file: ./.github/docker/helm.Dockerfile
+          tags: hubbleprotocol/kamino-lending-liquidations-bot:${{ needs.build_docker.outputs.build_version }}
+          push: false
+          secrets: |
+            "aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID_HELM_REPO }}"
+            "aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY_HELM_REPO }}"
+          build-args: |
+            "CHART=kamino-lending-liquidations-bot"
+            "BUILD_VERSION=${{ needs.build_docker.outputs.build_version }}"
+  pre_release:
+    if: ${{ github.ref == 'refs/heads/master' }}
+    needs:
+      - build_docker
+      - build_helm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Set up Docker buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+      - name: Fetch release artifact
+        id: fetch_release_bin
+        uses: docker/build-push-action@v3
+        with:
+          file: ./Dockerfile
+          tags: hubbleprotocol/kamino-lending-liquidations-bot-release-bin:${{ needs.build_docker.outputs.build_version }}
+          push: false
+          outputs: "type=tar,dest=kamino-lending-liquidations-bot-${{ needs.build_docker.outputs.build_version }}.tar"
+          cache-from: type=gha
+      - name: Create pre-release
+        id: pre_release
+        uses: marvinpinto/action-automatic-releases@latest
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          automatic_release_tag: kamino-lending-liquidations-bot/${{ needs.build_docker.outputs.release_version }}
+          prerelease: true
+          title: kamino-lending-liquidations-bot/${{ needs.build_docker.outputs.release_version }}
+          files: |
+            kamino-lending-liquidations-bot-*.tar
+      - name: Publish release event
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.HUBBLEPROTOCOLBOT_WRITE_REPO_PAT }}
+          repository: hubbleprotocol/hubble-infrastructure
+          event-type: helm-release
+          client-payload: '{"name": "kamino-lending-liquidations-bot", "namespace": "bot", "sub_dir": "kamino-lending-liquidations-bot", "build_version": "${{ needs.build_docker.outputs.build_version }}", "release_version": "${{ needs.build_docker.outputs.release_version }}", "changelog_url": "${{ github.server_url }}/${{ github.repository }}/releases/tag/kamino-lending-liquidations-bot%2F${{ needs.build_docker.outputs.release_version }}", "envs": ["dev", "prod"]}'
+          

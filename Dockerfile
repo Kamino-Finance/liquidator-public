@@ -1,6 +1,5 @@
 FROM node:16-alpine3.11
 
-
 # Create Directory for the Container
 RUN mkdir -p /home/solend/app
 WORKDIR /home/solend/app
@@ -19,4 +18,4 @@ COPY tsconfig.json /home/solend/app
 RUN npm run build
 
 # Start
-CMD ["npm", "start"]
+CMD npm run start

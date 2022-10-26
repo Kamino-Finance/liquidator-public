@@ -3,7 +3,7 @@ import got from 'got';
 import { MarketConfig } from 'global';
 import dotenv from 'dotenv';
 
-dotenv.config();
+dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
 
 export const OBLIGATION_LEN = 1300;
 export const RESERVE_LEN = 619;
@@ -22,11 +22,15 @@ function getApp() {
 
 function getMarketsUrl(): string {
   // Only fetch the targeted markets if specified. Otherwise we fetch all solend pools
+  // TODO: Add the specific market endpoint in the api
   if (process.env.MARKET) {
     return `https://api.solend.fi/v1/markets/configs?ids=${process.env.MARKET}`;
   }
 
-  return `https://api.solend.fi/v1/markets/configs?scope=solend&deployment=${getApp()}`;
+  if (getApp() === 'production') {
+    return 'https://api.hubbleprotocol.io/kamino-market';
+  }
+  return 'https://api.hubbleprotocol.io/kamino-market/?env=devnet';
 }
 
 export async function getMarkets(): Promise<MarketConfig[]> {
@@ -46,11 +50,11 @@ export async function getMarkets(): Promise<MarketConfig[]> {
       const data = resp.body as MarketConfig[];
       return data;
     } catch (error) {
-      console.error('error fetching /v1/markets/configs ', error);
+      console.error('error fetching /kamino-market ', error);
     }
   } while (attemptCount < maxAttempt);
 
-  throw new Error('failed to fetch /v1/markets/configs');
+  throw new Error('failed to fetch /kamino-market');
 }
 
 export const network = getApp();

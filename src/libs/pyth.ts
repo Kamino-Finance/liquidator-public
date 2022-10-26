@@ -6,10 +6,13 @@ import SwitchboardProgram from '@switchboard-xyz/sbv2-lite';
 import { Connection, PublicKey } from '@solana/web3.js';
 import BigNumber from 'bignumber.js';
 import { MarketConfig, MarketConfigReserve } from 'global';
+import dotenv from 'dotenv';
+
+dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
 
 const NULL_ORACLE = 'nu11111111111111111111111111111111111111111';
-const SWITCHBOARD_V1_ADDRESS = 'DtmE9D2CSB4L5D6A15mraeEjrGMm6auWVzgaD8hK2tZM';
-const SWITCHBOARD_V2_ADDRESS = 'SW1TCH7qEPTdLsDHRgPuMQjbQxKdH2aBStViMFnt64f';
+const SWITCHBOARD_V1_ADDRESS = process.env.APP === 'production' ? 'DtmE9D2CSB4L5D6A15mraeEjrGMm6auWVzgaD8hK2tZM' : '7azgmy1pFXHikv36q1zZASvFq5vFa39TT9NweVugKKTU';
+const SWITCHBOARD_V2_ADDRESS = process.env.APP === 'production' ? 'SW1TCH7qEPTdLsDHRgPuMQjbQxKdH2aBStViMFnt64f' : '2TfB33aLaneQb5TNVwyDz3jSZXS6jdW2ARw1Dgf84XCG';
 
 let switchboardV2: SwitchboardProgram | undefined;
 
@@ -41,7 +44,7 @@ async function getTokenOracleData(connection: Connection, reserve: MarketConfigR
       price = result?.lastRoundResult?.result;
     } else if (owner === SWITCHBOARD_V2_ADDRESS) {
       if (!switchboardV2) {
-        switchboardV2 = await SwitchboardProgram.loadMainnet(connection);
+        switchboardV2 = process.env.APP === 'production' ? await SwitchboardProgram.loadMainnet(connection) : await SwitchboardProgram.loadDevnet(connection);
       }
       const result = switchboardV2.decodeLatestAggregatorValue(info!);
       price = result?.toNumber();

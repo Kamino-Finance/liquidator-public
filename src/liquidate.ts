@@ -1,15 +1,17 @@
 /* eslint-disable no-continue */
 /* eslint-disable no-restricted-syntax */
 import {
-  Account,
-  Connection,
-  Keypair,
-  PublicKey,
+  Account, Connection, Keypair, PublicKey,
 } from '@solana/web3.js';
 import dotenv from 'dotenv';
 import { ObligationParser } from 'models/layouts/obligation';
 import {
-  getObligations, getReserves, getWalletBalances, getWalletDistTarget, getWalletTokenData, wait,
+  getObligations,
+  getReserves,
+  getWalletBalances,
+  getWalletDistTarget,
+  getWalletTokenData,
+  wait,
 } from 'libs/utils';
 import { getTokensOracleData } from 'libs/pyth';
 import { calculateRefreshedObligation } from 'libs/refreshObligation';
@@ -18,22 +20,27 @@ import { liquidateAndRedeem } from 'libs/actions/liquidateAndRedeem';
 import { rebalanceWallet } from 'libs/rebalanceWallet';
 import { Jupiter } from '@jup-ag/core';
 import { unwrapTokens } from 'libs/unwrap/unwrapToken';
+import express from 'express';
 import { getMarkets } from './config';
 
-dotenv.config();
+dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
+const app = express();
 
 async function runLiquidator() {
   const rpcEndpoint = process.env.RPC_ENDPOINT;
   if (!rpcEndpoint) {
-    throw new Error('Pls provide an private RPC endpoint in docker-compose.yaml');
+    throw new Error(
+      'Pls provide an private RPC endpoint in docker-compose.yaml',
+    );
   }
   const markets = await getMarkets();
   const connection = new Connection(rpcEndpoint, 'confirmed');
   // liquidator's keypair.
   const payer = new Account(JSON.parse(readSecret('keypair')));
+  const cluster = process.env.NODE_ENV === 'production' ? 'mainnet-beta' : 'devnet';
   const jupiter = await Jupiter.load({
     connection,
-    cluster: 'mainnet-beta',
+    cluster,
     user: Keypair.fromSecretKey(payer.secretKey),
     wrapUnwrapSOL: false,
   });
@@ -52,17 +59,14 @@ async function runLiquidator() {
   for (let epoch = 0; ; epoch += 1) {
     for (const market of markets) {
       const tokensOracle = await getTokensOracleData(connection, market);
-      const allObligations = await getObligations(connection, market.address);
-      const allReserves = await getReserves(connection, market.address);
+      const allObligations = await getObligations(connection, market.lendingMarket);
+      const allReserves = await getReserves(connection, market.lendingMarket);
 
       for (let obligation of allObligations) {
         try {
           while (obligation) {
             const {
-              borrowedValue,
-              unhealthyBorrowValue,
-              deposits,
-              borrows,
+              borrowedValue, unhealthyBorrowValue, deposits, borrows,
             } = calculateRefreshedObligation(
               obligation.info,
               allReserves,
@@ -77,7 +81,10 @@ async function runLiquidator() {
             // select repay token that has the highest market value
             let selectedBorrow;
             borrows.forEach((borrow) => {
-              if (!selectedBorrow || borrow.marketValue.gt(selectedBorrow.marketValue)) {
+              if (
+                !selectedBorrow
+                || borrow.marketValue.gt(selectedBorrow.marketValue)
+              ) {
                 selectedBorrow = borrow;
               }
             });
@@ -85,28 +92,47 @@ async function runLiquidator() {
             // select the withdrawal collateral token with the highest market value
             let selectedDeposit;
             deposits.forEach((deposit) => {
-              if (!selectedDeposit || deposit.marketValue.gt(selectedDeposit.marketValue)) {
+              if (
+                !selectedDeposit
+                || deposit.marketValue.gt(selectedDeposit.marketValue)
+              ) {
                 selectedDeposit = deposit;
               }
             });
 
             if (!selectedBorrow || !selectedDeposit) {
-              // skip toxic obligations caused by toxic oracle data
+            // skip toxic obligations caused by toxic oracle data
               break;
             }
 
             console.log(`Obligation ${obligation.pubkey.toString()} is underwater
               borrowedValue: ${borrowedValue.toString()}
               unhealthyBorrowValue: ${unhealthyBorrowValue.toString()}
-              market address: ${market.address}`);
+              market address: ${market.lendingMarket}`);
 
             // get wallet balance for selected borrow token
-            const { balanceBase } = await getWalletTokenData(connection, market, payer, selectedBorrow.mintAddress, selectedBorrow.symbol);
+            const { balanceBase } = await getWalletTokenData(
+              connection,
+              market,
+              payer,
+              selectedBorrow.mintAddress,
+              selectedBorrow.symbol,
+            );
             if (balanceBase === 0) {
-              console.log(`insufficient ${selectedBorrow.symbol} to liquidate obligation ${obligation.pubkey.toString()} in market: ${market.address}`);
+              console.log(
+                `insufficient ${
+                  selectedBorrow.symbol
+                } to liquidate obligation ${obligation.pubkey.toString()} in market: ${
+                  market.lendingMarket
+                }`,
+              );
               break;
             } else if (balanceBase < 0) {
-              console.log(`failed to get wallet balance for ${selectedBorrow.symbol} to liquidate obligation ${obligation.pubkey.toString()} in market: ${market.address}. 
+              console.log(`failed to get wallet balance for ${
+                selectedBorrow.symbol
+              } to liquidate obligation ${obligation.pubkey.toString()} in market: ${
+                market.lendingMarket
+              }. 
                 Potentially network error or token account does not exist in wallet`);
               break;
             }
@@ -126,17 +152,23 @@ async function runLiquidator() {
             const postLiquidationObligation = await connection.getAccountInfo(
               new PublicKey(obligation.pubkey),
             );
-            obligation = ObligationParser(obligation.pubkey, postLiquidationObligation!);
+            obligation = ObligationParser(
+              obligation.pubkey,
+              postLiquidationObligation!,
+            );
           }
         } catch (err) {
-          console.error(`error liquidating ${obligation!.pubkey.toString()}: `, err);
+          console.error(
+            `error liquidating ${obligation!.pubkey.toString()}: `,
+            err,
+          );
           continue;
         }
       }
 
       await unwrapTokens(connection, payer);
 
-      if (target.length > 0) {
+      if (target.length > 0 && cluster === 'mainnet-beta') {
         const walletBalances = await getWalletBalances(connection, payer, tokensOracle, market);
         await rebalanceWallet(connection, payer, jupiter, tokensOracle, walletBalances, target);
       }
@@ -149,4 +181,22 @@ async function runLiquidator() {
   }
 }
 
-runLiquidator();
+const port = process.env.SERVER_PORT || 8888;
+
+app.listen(port, () => {
+  // TODO: Add logger
+});
+
+app.get(['/health', 'health/liveness', '/health/readiness'], (req, res) => {
+  res.send('ok');
+});
+
+runLiquidator()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((err) => {
+    console.log('err', err);
+    // TODO: Log error
+    process.exit(1);
+  });
