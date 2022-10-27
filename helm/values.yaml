@@ -3,7 +3,13 @@ service-base-chart:
   image:
     repository: hubbleprotocol/kamino-lending-liquidations-bot
     tag: "latest"
+  containerPorts:
+    - name: http
+      containerPort: 80
+      protocol: TCP
   envVars:
+    - name: SERVER_PORT
+      value: "80"
     - name: NODE_ENV
       value: devnet
     - name: APP
