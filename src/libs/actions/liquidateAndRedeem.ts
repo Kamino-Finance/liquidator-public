@@ -75,7 +75,7 @@ export const liquidateAndRedeem = async (
   const rewardedWithdrawalCollateralAccount = await Token.getAssociatedTokenAddress(
     ASSOCIATED_TOKEN_PROGRAM_ID,
     TOKEN_PROGRAM_ID,
-    new PublicKey(withdrawReserve.collateralMintAddress),
+    new PublicKey(withdrawReserve.collateralMint),
     payer.publicKey,
   );
   const rewardedWithdrawalCollateralAccountInfo = await connection.getAccountInfo(
@@ -85,7 +85,7 @@ export const liquidateAndRedeem = async (
     const createUserCollateralAccountIx = Token.createAssociatedTokenAccountInstruction(
       ASSOCIATED_TOKEN_PROGRAM_ID,
       TOKEN_PROGRAM_ID,
-      new PublicKey(withdrawReserve.collateralMintAddress),
+      new PublicKey(withdrawReserve.collateralMint),
       rewardedWithdrawalCollateralAccount,
       payer.publicKey,
       payer.publicKey,
@@ -121,15 +121,15 @@ export const liquidateAndRedeem = async (
       rewardedWithdrawalCollateralAccount,
       rewardedWithdrawalLiquidityAccount,
       new PublicKey(repayReserve.address),
-      new PublicKey(repayReserve.liquidityAddress),
+      new PublicKey(repayReserve.liquiditySupply),
       new PublicKey(withdrawReserve.address),
-      new PublicKey(withdrawReserve.collateralMintAddress),
-      new PublicKey(withdrawReserve.collateralSupplyAddress),
-      new PublicKey(withdrawReserve.liquidityAddress),
+      new PublicKey(withdrawReserve.collateralMint),
+      new PublicKey(withdrawReserve.collateralSupply),
+      new PublicKey(withdrawReserve.liquiditySupply),
       new PublicKey(withdrawReserve.liquidityFeeReceiverAddress),
       obligation.pubkey,
-      new PublicKey(lendingMarket.address),
-      new PublicKey(lendingMarket.authorityAddress),
+      new PublicKey(lendingMarket.lendingMarket),
+      new PublicKey(lendingMarket.lendingMarketAuthority),
       payer.publicKey,
     ),
   );

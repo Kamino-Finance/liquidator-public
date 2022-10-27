@@ -4,6 +4,8 @@
 # production
 /build
 .env
+.env.production
+.env.devnet
 
 # misc
 id.json

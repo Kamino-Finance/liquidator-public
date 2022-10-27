@@ -82,11 +82,11 @@ export function getTokenInfoFromMarket(market: MarketConfig, symbol: string) {
     throw new Error(`Could not find ${symbol} in config.assets`);
   }
   return {
-    name: liquidityToken.name,
+    // name: liquidityToken.name,
     symbol: liquidityToken.symbol,
     decimals: liquidityToken.decimals,
     mintAddress: liquidityToken.mint,
-    logo: liquidityToken.logo,
+    // logo: liquidityToken.logo,
   };
 }
 
@@ -126,9 +126,10 @@ function stripEnd(s: string, c: string) {
 export function getProgramIdForCurrentDeployment(): string {
   return {
     beta: 'BLendhFh4HGnycEDDFhbeFEUYLP4fXB5tTHMoTX8Dch5',
-    production: 'So1endDq2YkqhipRh3WViPa8hdiSpxWy6z3Z6tMCpAo',
+    production: '7LVRdi61Smyr6rW1DtWZSkipr6jBvHPxPG1cQ74tZLWZ',
     staging: 'ALend7Ketfx5bxh6ghsCDXAoDrhvEmsXT3cynB6aPLgx',
-  }[process.env.APP || 'production'] || 'So1endDq2YkqhipRh3WViPa8hdiSpxWy6z3Z6tMCpAo';
+    devnet: '5HoQMHZHiqAYtYp7U5kFzK1Vv54CaiK8ya474wU2Ujdf',
+  }[process.env.APP || 'production'] || '7LVRdi61Smyr6rW1DtWZSkipr6jBvHPxPG1cQ74tZLWZ';
 }
 
 export async function getObligations(connection: Connection, lendingMarketAddr) {
