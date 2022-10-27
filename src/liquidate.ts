@@ -22,6 +22,7 @@ import { Jupiter } from '@jup-ag/core';
 import { unwrapTokens } from 'libs/unwrap/unwrapToken';
 import express from 'express';
 import { getMarkets } from './config';
+import logger from './services/logger';
 
 dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
 const app = express();
@@ -30,7 +31,7 @@ async function runLiquidator() {
   const rpcEndpoint = process.env.RPC_ENDPOINT;
   if (!rpcEndpoint) {
     throw new Error(
-      'Pls provide an private RPC endpoint in docker-compose.yaml',
+      'Pls provide an private RPC endpoint in the env config file',
     );
   }
   const markets = await getMarkets();
@@ -46,15 +47,14 @@ async function runLiquidator() {
   });
   const target = getWalletDistTarget();
 
-  console.log(`
-    app: ${process.env.APP}
-    rpc: ${rpcEndpoint}
-    wallet: ${payer.publicKey.toBase58()}
-    auto-rebalancing: ${target.length > 0 ? 'ON' : 'OFF'}
-    rebalancingDistribution: ${process.env.TARGETS}
-    
-    Running against ${markets.length} pools
-  `);
+  logger.info({
+    message: `Liquidator running against ${markets.length} pools`,
+    app: `${process.env.APP}`,
+    rpc: `${rpcEndpoint}`,
+    wallet: `${payer.publicKey.toBase58()}`,
+    autoRebalancing: `${target.length > 0 ? 'ON' : 'OFF'}`,
+    rebalancingDistribution: `${process.env.TARGETS}`,
+  });
 
   for (let epoch = 0; ; epoch += 1) {
     for (const market of markets) {
@@ -105,10 +105,12 @@ async function runLiquidator() {
               break;
             }
 
-            console.log(`Obligation ${obligation.pubkey.toString()} is underwater
-              borrowedValue: ${borrowedValue.toString()}
-              unhealthyBorrowValue: ${unhealthyBorrowValue.toString()}
-              market address: ${market.lendingMarket}`);
+            logger.info({
+              message: `Obligation ${obligation.pubkey.toString()} is underwater`,
+              borrowedValue: `${borrowedValue.toString()}`,
+              unhealthyBorrowValue: `${unhealthyBorrowValue.toString()}`,
+              marketAddress: `${market.lendingMarket}`,
+            });
 
             // get wallet balance for selected borrow token
             const { balanceBase } = await getWalletTokenData(
@@ -119,7 +121,7 @@ async function runLiquidator() {
               selectedBorrow.symbol,
             );
             if (balanceBase === 0) {
-              console.log(
+              logger.warn(
                 `insufficient ${
                   selectedBorrow.symbol
                 } to liquidate obligation ${obligation.pubkey.toString()} in market: ${
@@ -128,7 +130,7 @@ async function runLiquidator() {
               );
               break;
             } else if (balanceBase < 0) {
-              console.log(`failed to get wallet balance for ${
+              logger.warn(`failed to get wallet balance for ${
                 selectedBorrow.symbol
               } to liquidate obligation ${obligation.pubkey.toString()} in market: ${
                 market.lendingMarket
@@ -158,9 +160,11 @@ async function runLiquidator() {
             );
           }
         } catch (err) {
-          console.error(
-            `error liquidating ${obligation!.pubkey.toString()}: `,
-            err,
+          logger.error(
+            {
+              message: `error liquidating ${obligation!.pubkey.toString()}: `,
+              err,
+            },
           );
           continue;
         }
@@ -184,7 +188,7 @@ async function runLiquidator() {
 const port = process.env.SERVER_PORT || 8888;
 
 app.listen(port, () => {
-  // TODO: Add logger
+  logger.info('✅️kamino-lending-liquidations-bot is running');
 });
 
 app.get(['/health', 'health/liveness', '/health/readiness'], (req, res) => {
@@ -196,7 +200,6 @@ runLiquidator()
     process.exit(0);
   })
   .catch((err) => {
-    console.log('err', err);
-    // TODO: Log error
+    logger.error(err);
     process.exit(1);
   });

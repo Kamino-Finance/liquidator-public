@@ -250,6 +250,10 @@ export function getWalletDistTarget() {
   const target: TokenCount[] = [];
   const targetRaw = process.env.TARGETS || '';
 
+  if (targetRaw === '') {
+    return target;
+  }
+
   const targetDistributions = targetRaw.split(' ');
   for (const dist of targetDistributions) {
     const tokens = dist.split(':');
