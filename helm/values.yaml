@@ -33,8 +33,9 @@ service-base-chart:
     - name: REBALANCE_PADDING
       value: 0.2
     - name: TARGETS
-      value: 'USDC:100 SOL:0.5 ETH:0.05 BTC:0.001 stSOL:0.1'
+      value: >- 
+        'USDC:100 SOL:0.5 ETH:0.05 BTC:0.001 stSOL:0.1'
     - name: THROTTLE
       value: 10
   secrets:
-    keypair.json: AgCJkIogoHYHBWbzSi83+AAMH/HTMRcrZfvx9V6hUWf+HWoe4Ssay4rwKT+nSQ2slajiPtVRJ1oUznf9LtoMiYyPFO2p6iLSjmz+xbWpXqj15FnBZL2zLktCojflt8enJHHR5GyLozlDgIyipGVIwv8J9d/gFowK9UfLwk/yJdFNAYc9FcNBgozXnw6i/e8f9201mGnx0hHOBMlMJ7AElCj2SfTTDOjoRSxL7SA70wKgIqB5cpDWRR4ingksqFrbGYXvt6akAAW8oJCAVHelKCaJDyU61So0+/ypdYQ0zTPulzZLtGDiuCp7dLOEyUFXHvUcWVXGMLgaEGc0mAryePRji4UjQKpSM15vK5ze7fYnDcqd83c3R3xu66X9idfqtTgDIQNZnpOYgPiLUXMbOz0V39BPNa4WAxa9qo3T9Kwex/NWO76zL2Kj/AzG3MW3yKSNAjRkB1uiBoFg4XnVyYWx7zrldKpsBn68YqyEvcMW8ydhNIkpWuXY+gXNkt18uLlsYlm6+Ye7jqrVIDcTahM4qTQJWlgILcvtbipmEaUgFKIoaW0i3x92XGAvgSv9yR6EzbgcM6lu/IafSHPWwZs9XIZQkV62dYKfo2HYq+taO4qzSSaQiRgPyYOG53vRD5o7lgC7x72PU0eO/s6XosQFv+Xe6LW5fNUiQZ/2btJPGkcOWvifarLGNzamDZ1GLqY=
+    keypair.json:
