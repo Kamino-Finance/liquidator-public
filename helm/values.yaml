@@ -1,5 +1,9 @@
 kamino-lending-liquidations-bot:
   service-base-chart:
+    applicationName: kamino-lending-liquidations-bot
+    image:
+      repository: hubbleprotocol/kamino-lending-liquidations-bot
+      tag: "latest"
     envVars:
       - name: NODE_ENV
         value: devnet
