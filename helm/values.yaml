@@ -7,6 +7,15 @@ service-base-chart:
     - name: http
       containerPort: 80
       protocol: TCP
+  volumeMounts:
+    - name: kamino-lending-liquidations-bot-secret-vol
+      mountPath: /root/.kamino-lending
+      readOnly: true
+  volumes:
+    - name: kamino-lending-liquidations-bot-secret-vol
+      secret:
+        secretName: kamino-lending-liquidations-bot-secret
+        defaultMode: 292
   envVars:
     - name: SERVER_PORT
       value: "80"
@@ -20,7 +29,7 @@ service-base-chart:
           name: solana-rpc-cluster-secret
           key: DEVNET_ENDPOINT
     - name: SECRET_PATH
-      value: /root/.hubble/keypair.json
+      value: /root/.kamino-lending/keypair.json
     - name: REBALANCE_PADDING
       value: 0.2
     - name: TARGETS
