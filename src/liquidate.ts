@@ -192,7 +192,7 @@ app.listen(port, () => {
   logger.info('✅️kamino-lending-liquidations-bot is running');
 });
 
-app.get(['/health', 'health/liveness', '/health/readiness'], (req, res) => {
+app.get(['/health', '/health/liveness', '/health/readiness'], (req, res) => {
   res.send('ok');
 });
 
