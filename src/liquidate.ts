@@ -37,6 +37,8 @@ async function runLiquidator() {
   const markets = await getMarkets();
   const connection = new Connection(rpcEndpoint, 'confirmed');
   // liquidator's keypair.
+  const secretResult = readSecret('keypair');
+  console.log('secretResult', secretResult);
   const payer = new Account(JSON.parse(readSecret('keypair')));
   const cluster = process.env.NODE_ENV === 'production' ? 'mainnet-beta' : 'devnet';
   const jupiter = await Jupiter.load({

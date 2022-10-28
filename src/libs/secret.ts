@@ -1,7 +1,9 @@
 import fs from 'fs';
 
 export function readSecret(secretName) {
+  console.log('secretName', secretName);
   const path = process.env.SECRET_PATH || `/run/secrets/${secretName}`;
+  console.log('path', path);
   try {
     return fs.readFileSync(path, 'utf8');
   } catch (err) {

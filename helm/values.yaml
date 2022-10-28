@@ -16,6 +16,9 @@ service-base-chart:
       secret:
         secretName: kamino-lending-liquidations-bot-secret
         defaultMode: 292
+  service:
+    additionalLabels:
+      prometheus-monitor: hubble-prom-metrics
   envVars:
     - name: SERVER_PORT
       value: "80"
@@ -39,3 +42,4 @@ service-base-chart:
       value: "10"
   secrets:
     keypair.json:
+
