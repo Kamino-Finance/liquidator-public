@@ -12,6 +12,7 @@ import { TokenOracleData } from './pyth';
 
 export const WAD = new BigNumber(`1${''.padEnd(18, '0')}`);
 export const U64_MAX = '18446744073709551615';
+export const NULL_PUBKEY = 'nu11111111111111111111111111111111111111111';
 
 // Converts amount to human (rebase with decimals)
 export function toHuman(market: KaminoMarket, amount: string, symbol: string) {

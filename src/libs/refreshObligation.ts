@@ -1,14 +1,14 @@
-/* eslint-disable @typescript-eslint/no-throw-literal */
 import BigNumber from 'bignumber.js';
 import { findWhere, find } from 'underscore';
 import {
-  getCollateralExchangeRate, getLiquidationThresholdRate, getLoanToValueRate, WAD,
+  WAD,
 } from 'models/layouts/reserve';
 import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
 import { KaminoReserve, Obligation } from '@hubbleprotocol/kamino-lending-sdk';
-import { ObligationCollateral, ObligationLiquidity } from '@hubbleprotocol/kamino-lending-sdk/dist/types';
+import { ObligationCollateral, ObligationLiquidity, U192 } from '@hubbleprotocol/kamino-lending-sdk/dist/types';
 import { TokenOracleData } from './pyth';
+import { NULL_PUBKEY } from './utils';
 
 export const RISKY_OBLIGATION_THRESHOLD = 78;
 
@@ -27,27 +27,24 @@ export function calculateRefreshedObligation(
   const deposits = [] as Deposit[];
   const borrows = [] as Borrow[];
 
-  obligation.deposits.forEach((deposit: ObligationCollateral) => {
+  obligation.deposits.filter((deposit: ObligationCollateral) => deposit.depositReserve.toBase58() !== PublicKey.default.toBase58() && deposit.depositReserve.toString() !== NULL_PUBKEY).forEach((deposit: ObligationCollateral) => {
     const tokenOracle = findWhere(tokensOracle, { reserveAddress: deposit.depositReserve.toString() });
     if (!tokenOracle) {
+      // eslint-disable-next-line @typescript-eslint/no-throw-literal
       throw `Missing token info for reserve ${deposit.depositReserve.toString()}, skipping this obligation. Please restart liquidator to fetch latest configs from /v1/config`;
     }
     const { price, decimals, symbol } = tokenOracle;
-    const reserve = find(reserves, (r) => r.pubkey.toString() === deposit.depositReserve.toString()).info;
-
-    const collateralExchangeRate = getCollateralExchangeRate(reserve);
+    const reserve: KaminoReserve = find(reserves, (r: KaminoReserve) => r.config.address.toString() === deposit.depositReserve.toString());
+    const { cTokenExchangeRate, loanToValueRatio, liquidationThreshold } = reserve.stats!;
     const marketValue = new BigNumber(deposit.depositedAmount.toString())
       .multipliedBy(WAD)
-      .dividedBy(collateralExchangeRate)
+      .dividedBy(cTokenExchangeRate)
       .multipliedBy(price)
       .dividedBy(decimals);
 
-    const loanToValueRate = getLoanToValueRate(reserve);
-    const liquidationThresholdRate = getLiquidationThresholdRate(reserve);
-
     depositedValue = depositedValue.plus(marketValue);
-    allowedBorrowValue = allowedBorrowValue.plus(marketValue.multipliedBy(loanToValueRate));
-    unhealthyBorrowValue = unhealthyBorrowValue.plus(marketValue.multipliedBy(liquidationThresholdRate));
+    allowedBorrowValue = allowedBorrowValue.plus(marketValue.multipliedBy(loanToValueRatio));
+    unhealthyBorrowValue = unhealthyBorrowValue.plus(marketValue.multipliedBy(liquidationThreshold));
 
     deposits.push({
       depositReserve: deposit.depositReserve,
@@ -57,20 +54,22 @@ export function calculateRefreshedObligation(
     });
   });
 
-  obligation.borrows.forEach((borrow: ObligationLiquidity) => {
+  obligation.borrows.filter((borrow: ObligationLiquidity) => borrow.borrowReserve.toBase58() !== PublicKey.default.toBase58() && borrow.borrowReserve.toBase58() !== NULL_PUBKEY).forEach((borrow: ObligationLiquidity) => {
     const borrowAmountWads = new BigNumber(borrow.borrowedAmountWads.toString());
     const tokenOracle = findWhere(tokensOracle,
       { reserveAddress: borrow.borrowReserve.toString() });
     if (!tokenOracle) {
+      // eslint-disable-next-line @typescript-eslint/no-throw-literal
       throw `Missing token info for reserve ${borrow.borrowReserve.toString()}, skipping this obligation. Please restart liquidator to fetch latest config from /v1/config.`;
     }
     const {
       price, decimals, symbol, mintAddress,
     } = tokenOracle;
-    const reserve = find(reserves, (r) => r.pubkey.toString() === borrow.borrowReserve.toString()).info;
+    const reserve: KaminoReserve = find(reserves, (r: KaminoReserve) => r.config.address.toString() === borrow.borrowReserve.toString());
+    const cumulativeBorrowRateWadsObligation = u192ToBN(borrow.cumulativeBorrowRateWads);
     const borrowAmountWadsWithInterest = getBorrrowedAmountWadsWithInterest(
-      new BigNumber(reserve.liquidity.cumulativeBorrowRateWads.toString()),
-      new BigNumber(borrow.cumulativeBorrowRateWads.toString()),
+      new BigNumber(reserve!.stats!.cumulativeBorrowRateWads.toString()),
+      new BigNumber(cumulativeBorrowRateWadsObligation.toString()),
       borrowAmountWads,
     );
 
@@ -148,3 +147,11 @@ type Deposit = {
   marketValue: BigNumber,
   symbol: string;
 };
+
+function u192ToBN(u192: U192): BN {
+  const [a, b, c] = u192.value;
+  const shift64 = new BN(2).pow(new BN(64));
+  const shift128 = shift64.pow(new BN(2));
+  const high = a.add(b.mul(shift64)).add(c.mul(shift128));
+  return high;
+}
