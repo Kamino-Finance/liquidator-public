@@ -5,9 +5,9 @@ import {
 import {
   assignBlockInfoToTransaction, createTransactionWithExtraBudget, getAssociatedTokenAddressAndData, Kamino,
 } from '@hubbleprotocol/kamino-sdk';
-import { getConfigByCluster } from '@hubbleprotocol/hubble-config';
+import { getConfigByCluster, SolanaCluster } from '@hubbleprotocol/hubble-config';
 
-const cluster = process.env.APP === 'mainnet-beta' ? 'mainnet-beta' : 'devnet';
+const cluster = process.env.APP as SolanaCluster;
 
 export const checkAndUnwrapKaminoTokens = async (
   connection: Connection,

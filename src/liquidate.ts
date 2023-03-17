@@ -10,7 +10,7 @@ import {
   getWalletTokenData,
   wait,
 } from 'libs/utils';
-import { getTokensOracleData } from 'libs/pyth';
+import { getTokensOracleData } from 'libs/oracle';
 import { calculateRefreshedObligation } from 'libs/refreshObligation';
 import { readSecret } from 'libs/secret';
 import { liquidateAndRedeem } from 'libs/actions/liquidateAndRedeem';

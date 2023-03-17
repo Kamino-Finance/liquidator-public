@@ -7,7 +7,7 @@ import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
 import { KaminoReserve, Obligation } from '@hubbleprotocol/kamino-lending-sdk';
 import { ObligationCollateral, ObligationLiquidity, U192 } from '@hubbleprotocol/kamino-lending-sdk/dist/types';
-import { TokenOracleData } from './pyth';
+import { TokenOracleData } from './oracle';
 import { NULL_PUBKEY } from './utils';
 
 export const RISKY_OBLIGATION_THRESHOLD = 78;

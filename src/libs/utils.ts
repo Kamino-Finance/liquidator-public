@@ -8,7 +8,7 @@ import {
   LiquidityToken, TokenCount,
 } from 'global';
 import { findWhere } from 'underscore';
-import { TokenOracleData } from './pyth';
+import { TokenOracleData } from './oracle';
 
 export const WAD = new BigNumber(`1${''.padEnd(18, '0')}`);
 export const U64_MAX = '18446744073709551615';
