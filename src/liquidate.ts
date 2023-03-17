@@ -14,9 +14,9 @@ import { getTokensOracleData } from 'libs/oracle';
 import { calculateRefreshedObligation } from 'libs/refreshObligation';
 import { readSecret } from 'libs/secret';
 import { liquidateAndRedeem } from 'libs/actions/liquidateAndRedeem';
-import { rebalanceWallet } from 'libs/rebalanceWallet';
+// import { rebalanceWallet } from 'libs/rebalanceWallet';
 import { Jupiter } from '@jup-ag/core';
-import { unwrapTokens } from 'libs/unwrap/unwrapToken';
+// import { unwrapTokens } from 'libs/unwrap/unwrapToken';
 import express from 'express';
 import {
   KaminoMarket, ENV, KAMINO_LENDING_DEVNET_PROGRAM_ID, Obligation,
@@ -70,6 +70,7 @@ async function runLiquidator() {
       const tokensOracle = await getTokensOracleData(connection, kaminoMarket);
       const allObligations = await getAllObligationsForMarket(kaminoMarket, connection);
 
+      // TODO: Improve error handling & logging
       // eslint-disable-next-line prefer-const
       for (let { obligation, obligationAddress } of allObligations) {
         try {
@@ -92,7 +93,7 @@ async function runLiquidator() {
             borrows.forEach((borrow) => {
               if (
                 !selectedBorrow
-                          || borrow.marketValue.gt(selectedBorrow.marketValue)
+                                  || borrow.marketValue.gt(selectedBorrow.marketValue)
               ) {
                 selectedBorrow = borrow;
               }
@@ -103,14 +104,14 @@ async function runLiquidator() {
             deposits.forEach((deposit) => {
               if (
                 !selectedDeposit
-                          || deposit.marketValue.gt(selectedDeposit.marketValue)
+                                  || deposit.marketValue.gt(selectedDeposit.marketValue)
               ) {
                 selectedDeposit = deposit;
               }
             });
 
             if (!selectedBorrow || !selectedDeposit) {
-            // skip toxic obligations caused by toxic oracle data
+              // skip toxic obligations caused by toxic oracle data
               break;
             }
 
@@ -144,7 +145,7 @@ async function runLiquidator() {
               } to liquidate obligation ${obligationAddress.toString()} in market: ${
                 market.lendingMarket
               }. 
-                        Potentially network error or token account does not exist in wallet`);
+                                Potentially network error or token account does not exist in wallet`);
               break;
             }
 
@@ -176,12 +177,12 @@ async function runLiquidator() {
           continue;
         }
       }
-
-      await unwrapTokens(connection, payer);
+      // TODO: Fix this, it fails
+      // await unwrapTokens(connectijon, payer);
 
       if (target.length > 0 && cluster === 'mainnet-beta') {
         const walletBalances = await getWalletBalances(connection, payer, tokensOracle, market);
-        await rebalanceWallet(connection, payer, jupiter, tokensOracle, walletBalances, target);
+      //   await rebalanceWallet(connection, payer, jupiter, tokensOracle, walletBalances, target);
       }
 
       // Throttle to avoid rate limiter
