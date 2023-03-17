@@ -1,26 +1,3 @@
-export interface MarketConfig {
-  name: string;
-  isPrimary: boolean;
-  // description: string;
-  // creator: string;
-  lendingMarket: string;
-  lendingMarketAuthority: string;
-  owner: string;
-  reserves: MarketConfigReserve[];
-}
-
-export interface MarketConfigReserve {
-  liquidityToken: LiquidityToken;
-  pythOracle: string;
-  switchboardOracle: string;
-  address: string;
-  collateralMint: string;
-  collateralSupply: string;
-  liquiditySupply: string;
-  liquidityFeeReceiverAddress: string;
-  userSupplyCap: number;
-}
-
 export interface LiquidityToken {
   // coingeckoID: string;
   decimals: number;
@@ -29,38 +6,6 @@ export interface LiquidityToken {
   // name: string;
   symbol: string;
   // volume24h: string;
-}
-
-export interface Asset {
-  name: string;
-  symbol: string;
-  decimals: number;
-  mintAddress: string;
-}
-export interface Oracles {
-  pythProgramID: string;
-  switchboardProgramID: string;
-  assets: OracleAsset[];
-}
-export interface OracleAsset {
-  asset: string;
-  priceAddress: string;
-  switchboardFeedAddress: string;
-}
-export interface Market {
-  name: string;
-  address: string;
-  authorityAddress: string;
-  reserves: Reserve[];
-}
-export interface Reserve {
-  asset: string;
-  address: string;
-  collateralMint: string;
-  collateralSupply: string;
-  liquiditySupply: string;
-  liquidityFeeReceiverAddress: string;
-  userSupplyCap?: number;
 }
 
 export interface TokenCount {

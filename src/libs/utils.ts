@@ -1,28 +1,26 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable no-restricted-syntax */
+import { KaminoMarket } from '@hubbleprotocol/kamino-lending-sdk';
 import { ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { Connection, PublicKey } from '@solana/web3.js';
 import BigNumber from 'bignumber.js';
 import {
-  LiquidityToken, MarketConfig, TokenCount,
+  LiquidityToken, TokenCount,
 } from 'global';
-import {
-  ObligationParser, OBLIGATION_LEN,
-} from 'models/layouts/obligation';
-import { ReserveParser, RESERVE_LEN } from 'models/layouts/reserve';
 import { findWhere } from 'underscore';
-import { TokenOracleData } from './pyth';
+import { TokenOracleData } from './oracle';
 
 export const WAD = new BigNumber(`1${''.padEnd(18, '0')}`);
 export const U64_MAX = '18446744073709551615';
+export const NULL_PUBKEY = 'nu11111111111111111111111111111111111111111';
 
 // Converts amount to human (rebase with decimals)
-export function toHuman(market: MarketConfig, amount: string, symbol: string) {
+export function toHuman(market: KaminoMarket, amount: string, symbol: string) {
   const decimals = getDecimals(market, symbol);
   return toHumanDec(amount, decimals);
 }
 
-export function toBaseUnit(market: MarketConfig, amount: string, symbol: string) {
+export function toBaseUnit(market: KaminoMarket, amount: string, symbol: string) {
   if (amount === U64_MAX) return amount;
   const decimals = getDecimals(market, symbol);
   return toBaseUnitDec(amount, decimals);
@@ -62,31 +60,29 @@ function toBaseUnitDec(amount: string, decimals: number) {
   );
 }
 
-function getDecimals(market: MarketConfig, symbol: string) {
+function getDecimals(market: KaminoMarket, symbol: string) {
   const tokenInfo = getTokenInfo(market, symbol);
   return tokenInfo.decimals;
 }
 
 // Returns token info from config
-export function getTokenInfo(market: MarketConfig, symbol: string) {
-  const tokenInfo = findWhere(market.reserves.map((reserve) => reserve.liquidityToken), { symbol });
+export function getTokenInfo(market: KaminoMarket, symbol: string) {
+  const tokenInfo = findWhere(market.reserves.map((reserve) => reserve.config.liquidityToken), { symbol });
   if (!tokenInfo) {
     throw new Error(`Could not find ${symbol} in config.assets`);
   }
   return tokenInfo;
 }
 
-export function getTokenInfoFromMarket(market: MarketConfig, symbol: string) {
-  const liquidityToken: LiquidityToken = findWhere(market.reserves.map((reserve) => reserve.liquidityToken), { symbol });
+export function getTokenInfoFromMarket(market: KaminoMarket, symbol: string) {
+  const liquidityToken: LiquidityToken = findWhere(market.reserves.map((reserve) => reserve.config.liquidityToken), { symbol });
   if (!liquidityToken) {
     throw new Error(`Could not find ${symbol} in config.assets`);
   }
   return {
-    // name: liquidityToken.name,
     symbol: liquidityToken.symbol,
     decimals: liquidityToken.decimals,
     mintAddress: liquidityToken.mint,
-    // logo: liquidityToken.logo,
   };
 }
 
@@ -123,56 +119,6 @@ function stripEnd(s: string, c: string) {
   return s.slice(0, i + 1);
 }
 
-export function getProgramIdForCurrentDeployment(): string {
-  return {
-    beta: 'BLendhFh4HGnycEDDFhbeFEUYLP4fXB5tTHMoTX8Dch5',
-    production: '7LVRdi61Smyr6rW1DtWZSkipr6jBvHPxPG1cQ74tZLWZ',
-    staging: 'ALend7Ketfx5bxh6ghsCDXAoDrhvEmsXT3cynB6aPLgx',
-    devnet: '5HoQMHZHiqAYtYp7U5kFzK1Vv54CaiK8ya474wU2Ujdf',
-  }[process.env.APP || 'production'] || '7LVRdi61Smyr6rW1DtWZSkipr6jBvHPxPG1cQ74tZLWZ';
-}
-
-export async function getObligations(connection: Connection, lendingMarketAddr) {
-  const programID = getProgramIdForCurrentDeployment();
-  const resp = await connection.getProgramAccounts(new PublicKey(programID), {
-    commitment: connection.commitment,
-    filters: [
-      {
-        memcmp: {
-          offset: 10,
-          bytes: lendingMarketAddr,
-        },
-      },
-      {
-        dataSize: OBLIGATION_LEN,
-      }],
-    encoding: 'base64',
-  });
-
-  return resp.map((account) => ObligationParser(account.pubkey, account.account));
-}
-
-export async function getReserves(connection: Connection, lendingMarketAddr) {
-  const programID = getProgramIdForCurrentDeployment();
-  const resp = await connection.getProgramAccounts(new PublicKey(programID), {
-    commitment: connection.commitment,
-    filters: [
-      {
-        memcmp: {
-          offset: 10,
-          bytes: lendingMarketAddr,
-        },
-      },
-      {
-        dataSize: RESERVE_LEN,
-      },
-    ],
-    encoding: 'base64',
-  });
-
-  return resp.map((account) => ReserveParser(account.pubkey, account.account));
-}
-
 export async function getWalletBalances(connection, wallet, tokensOracle, market) {
   const promises: Promise<any>[] = [];
   for (const [key, value] of Object.entries(tokensOracle)) {
@@ -185,7 +131,7 @@ export async function getWalletBalances(connection, wallet, tokensOracle, market
   return walletBalances;
 }
 
-export async function getWalletTokenData(connection: Connection, market: MarketConfig, wallet, mintAddress, symbol) {
+export async function getWalletTokenData(connection: Connection, market: KaminoMarket, wallet, mintAddress, symbol) {
   const token = new Token(
     connection,
     new PublicKey(mintAddress),
