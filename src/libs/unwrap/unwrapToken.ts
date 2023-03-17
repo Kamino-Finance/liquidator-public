@@ -1,9 +1,9 @@
-import { Account, Connection } from '@solana/web3.js';
+import { Connection, Keypair } from '@solana/web3.js';
 import { checkAndUnwrapKaminoTokens } from './kamino/unwrapKamino';
 
 export const unwrapTokens = async (
   connection: Connection,
-  payer: Account,
+  payer: Keypair,
 ) => {
   await checkAndUnwrapKaminoTokens(connection, payer);
 };

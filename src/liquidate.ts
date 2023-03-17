@@ -1,13 +1,10 @@
 /* eslint-disable no-continue */
 /* eslint-disable no-restricted-syntax */
 import {
-  Account, Connection, Keypair, PublicKey,
+  Connection, Keypair, PublicKey,
 } from '@solana/web3.js';
 import dotenv from 'dotenv';
-import { ObligationParser } from 'models/layouts/obligation';
 import {
-  getObligations,
-  getReserves,
   getWalletBalances,
   getWalletDistTarget,
   getWalletTokenData,
@@ -21,6 +18,10 @@ import { rebalanceWallet } from 'libs/rebalanceWallet';
 import { Jupiter } from '@jup-ag/core';
 import { unwrapTokens } from 'libs/unwrap/unwrapToken';
 import express from 'express';
+import {
+  KaminoMarket, ENV, KAMINO_LENDING_DEVNET_PROGRAM_ID, Obligation,
+} from '@hubbleprotocol/kamino-lending-sdk';
+import { getAllObligationsForMarket } from 'models/layouts/obligation';
 import { getMarkets } from './config';
 import logger from './services/logger';
 
@@ -37,9 +38,9 @@ async function runLiquidator() {
   const markets = await getMarkets();
   const connection = new Connection(rpcEndpoint, 'confirmed');
   // liquidator's keypair.
-  const payer = new Account(JSON.parse(readSecret('keypair')));
+  const payer = Keypair.fromSecretKey(Buffer.from(JSON.parse(readSecret('keypair'))));
 
-  const cluster = process.env.NODE_ENV === 'production' ? 'mainnet-beta' : 'devnet';
+  const cluster = process.env.NODE_ENV === 'mainnet-beta' ? 'mainnet-beta' : 'devnet';
   const jupiter = await Jupiter.load({
     connection,
     cluster,
@@ -59,18 +60,25 @@ async function runLiquidator() {
 
   for (let epoch = 0; ; epoch += 1) {
     for (const market of markets) {
-      const tokensOracle = await getTokensOracleData(connection, market);
-      const allObligations = await getObligations(connection, market.lendingMarket);
-      const allReserves = await getReserves(connection, market.lendingMarket);
+      const kaminoMarket = await KaminoMarket.initialize(
+        connection,
+        KAMINO_LENDING_DEVNET_PROGRAM_ID,
+        market.lendingMarket,
+        process.env.APP as ENV,
+      );
 
-      for (let obligation of allObligations) {
+      const tokensOracle = await getTokensOracleData(connection, kaminoMarket);
+      const allObligations = await getAllObligationsForMarket(kaminoMarket, connection);
+
+      // eslint-disable-next-line prefer-const
+      for (let { obligation, obligationAddress } of allObligations) {
         try {
           while (obligation) {
             const {
               borrowedValue, unhealthyBorrowValue, deposits, borrows,
             } = calculateRefreshedObligation(
-              obligation.info,
-              allReserves,
+              obligation,
+              kaminoMarket.reserves,
               tokensOracle,
             );
 
@@ -84,7 +92,7 @@ async function runLiquidator() {
             borrows.forEach((borrow) => {
               if (
                 !selectedBorrow
-                || borrow.marketValue.gt(selectedBorrow.marketValue)
+                          || borrow.marketValue.gt(selectedBorrow.marketValue)
               ) {
                 selectedBorrow = borrow;
               }
@@ -95,7 +103,7 @@ async function runLiquidator() {
             deposits.forEach((deposit) => {
               if (
                 !selectedDeposit
-                || deposit.marketValue.gt(selectedDeposit.marketValue)
+                          || deposit.marketValue.gt(selectedDeposit.marketValue)
               ) {
                 selectedDeposit = deposit;
               }
@@ -107,7 +115,7 @@ async function runLiquidator() {
             }
 
             logger.info({
-              message: `Obligation ${obligation.pubkey.toString()} is underwater`,
+              message: `Obligation ${obligationAddress.toString()} is underwater`,
               borrowedValue: `${borrowedValue.toString()}`,
               unhealthyBorrowValue: `${unhealthyBorrowValue.toString()}`,
               marketAddress: `${market.lendingMarket}`,
@@ -116,7 +124,7 @@ async function runLiquidator() {
             // get wallet balance for selected borrow token
             const { balanceBase } = await getWalletTokenData(
               connection,
-              market,
+              kaminoMarket,
               payer,
               selectedBorrow.mintAddress,
               selectedBorrow.symbol,
@@ -125,7 +133,7 @@ async function runLiquidator() {
               logger.warn(
                 `insufficient ${
                   selectedBorrow.symbol
-                } to liquidate obligation ${obligation.pubkey.toString()} in market: ${
+                } to liquidate obligation ${obligationAddress.toString()} in market: ${
                   market.lendingMarket
                 }`,
               );
@@ -133,10 +141,10 @@ async function runLiquidator() {
             } else if (balanceBase < 0) {
               logger.warn(`failed to get wallet balance for ${
                 selectedBorrow.symbol
-              } to liquidate obligation ${obligation.pubkey.toString()} in market: ${
+              } to liquidate obligation ${obligationAddress.toString()} in market: ${
                 market.lendingMarket
               }. 
-                Potentially network error or token account does not exist in wallet`);
+                        Potentially network error or token account does not exist in wallet`);
               break;
             }
 
@@ -148,22 +156,20 @@ async function runLiquidator() {
               balanceBase,
               selectedBorrow.symbol,
               selectedDeposit.symbol,
-              market,
+              kaminoMarket,
               obligation,
             );
 
             const postLiquidationObligation = await connection.getAccountInfo(
-              new PublicKey(obligation.pubkey),
+              new PublicKey(obligationAddress),
             );
-            obligation = ObligationParser(
-              obligation.pubkey,
-              postLiquidationObligation!,
-            );
+            // TODO: Why reassign?
+            obligation = Obligation.decode(postLiquidationObligation?.data!);
           }
         } catch (err) {
           logger.error(
             {
-              message: `error liquidating ${obligation!.pubkey.toString()}: `,
+              message: `error liquidating ${obligationAddress.toString()}: `,
               err,
             },
           );

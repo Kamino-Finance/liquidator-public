@@ -1,20 +1,17 @@
 /* eslint-disable no-loop-func */
 import got from 'got';
-import { MarketConfig } from 'global';
 import dotenv from 'dotenv';
+import { MarketConfigType } from '@hubbleprotocol/kamino-lending-sdk';
 
 dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
 
-export const OBLIGATION_LEN = 1300;
-export const RESERVE_LEN = 619;
-export const LENDING_MARKET_LEN = 290;
-const eligibleApps = ['production', 'devnet'];
+const eligibleApps = ['mainnet-beta', 'devnet'];
 
 function getApp() {
   const app = process.env.APP;
   if (!eligibleApps.includes(app!)) {
     throw new Error(
-      `Unrecognized env app provided: ${app}. Must be production or devnet`,
+      `Unrecognized env app provided: ${app}. Must be mainnet-beta or devnet`,
     );
   }
   return app;
@@ -22,18 +19,17 @@ function getApp() {
 
 function getMarketsUrl(): string {
   // Only fetch the targeted markets if specified. Otherwise we fetch all solend pools
-  // TODO: Add the specific market endpoint in the api
-  if (process.env.MARKET) {
-    return `https://api.solend.fi/v1/markets/configs?ids=${process.env.MARKET}`;
-  }
 
-  if (getApp() === 'production') {
-    return 'https://api.hubbleprotocol.io/kamino-market';
+  const api = process.env.MARKET
+    ? `https://api.kamino.finance//kamino-market/${process.env.MARKET}` : 'https://api.kamino.finance/kamino-market';
+
+  if (getApp() === 'mainnet-beta') {
+    return api;
   }
-  return 'https://api.hubbleprotocol.io/kamino-market/?env=devnet';
+  return `${api}?env=devnet`;
 }
 
-export async function getMarkets(): Promise<MarketConfig[]> {
+export async function getMarkets(): Promise<MarketConfigType[]> {
   let attemptCount = 0;
   let backoffFactor = 1;
   const maxAttempt = 10;
@@ -47,7 +43,7 @@ export async function getMarkets(): Promise<MarketConfig[]> {
       }
       attemptCount += 1;
       const resp = await got(marketUrl, { json: true });
-      const data = resp.body as MarketConfig[];
+      const data = resp.body as MarketConfigType[];
       return data;
     } catch (error) {
       console.error('error fetching /kamino-market ', error);

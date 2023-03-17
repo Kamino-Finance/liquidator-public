@@ -1,12 +1,14 @@
 /* eslint-disable @typescript-eslint/no-throw-literal */
 import BigNumber from 'bignumber.js';
 import { findWhere, find } from 'underscore';
-import { Obligation, ObligationCollateral, ObligationLiquidity } from 'models/layouts/obligation';
 import {
   getCollateralExchangeRate, getLiquidationThresholdRate, getLoanToValueRate, WAD,
 } from 'models/layouts/reserve';
 import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
+import { KaminoReserve, Obligation } from '@hubbleprotocol/kamino-lending-sdk';
+import { ObligationCollateral, ObligationLiquidity } from '@hubbleprotocol/kamino-lending-sdk/dist/types';
+import { TokenOracleData } from './pyth';
 
 export const RISKY_OBLIGATION_THRESHOLD = 78;
 
@@ -15,8 +17,8 @@ export const RISKY_OBLIGATION_THRESHOLD = 78;
 // to optimize of transaction fees.
 export function calculateRefreshedObligation(
   obligation: Obligation,
-  reserves,
-  tokensOracle,
+  reserves: KaminoReserve[],
+  tokensOracle: TokenOracleData[],
 ) {
   let depositedValue = new BigNumber(0);
   let borrowedValue = new BigNumber(0);
