@@ -422,6 +422,11 @@
   resolved "https://registry.yarnpkg.com/@hubbleprotocol/hubble-config/-/hubble-config-1.0.246.tgz#cdd22ac44aa51dbcbd6073abf736f6f15de2da29"
   integrity sha512-+aapeTerLOscmsf5xQbi5eVhqqDz8GCp0p8ac884IAOthn/m0eTnR2oHGNa2kMw47I57LUCIIRm1frT3oYLxaQ==
 
+"@hubbleprotocol/hubble-config@^1.0.248":
+  version "1.0.248"
+  resolved "https://registry.yarnpkg.com/@hubbleprotocol/hubble-config/-/hubble-config-1.0.248.tgz#91d25308f1301cb2d85812ee7e796edc796407f9"
+  integrity sha512-9hOz8D5SCejU+T82wJd5XPlM0gAM7e1rfiJX49QT4eP/GABjBjfBXBEkPXH6tS5f1nl3OUxO8vRbjORYcF9XNw==
+
 "@hubbleprotocol/hubble-idl@^1.0.217":
   version "1.0.217"
   resolved "https://registry.yarnpkg.com/@hubbleprotocol/hubble-idl/-/hubble-idl-1.0.217.tgz#9f57e6cfb2274de1e0bad72cbf30540e4df54089"
@@ -474,6 +479,18 @@
   integrity sha512-YZm/4BNHNxBU4hUf7DaR4ajFyNJw+Nfz7l4iqta6fG0G/Qwi/Hmx4hEZG2PO3l2IrFXdpenJCvnRnibVI4DXfw==
   dependencies:
     "@hubbleprotocol/hubble-config" "^1.0.246"
+    "@project-serum/anchor" "^0.21.0"
+    "@project-serum/serum" "^0.13.65"
+    "@solana/buffer-layout" "^4.0.0"
+    "@solana/wallet-adapter-base" "^0.9.20"
+    bn.js "^5.2.1"
+
+"@hubbleprotocol/scope-sdk@^1.0.251":
+  version "1.0.251"
+  resolved "https://registry.yarnpkg.com/@hubbleprotocol/scope-sdk/-/scope-sdk-1.0.251.tgz#5b85af2eee211c5dfd198b28703e64c0fb9cfc23"
+  integrity sha512-EuPY4kzadpUgXuS2sUZ1nY6uzU7QraxHOQGQ/t3p7ZRd+VE0CCzhc30gLTsHJGUhlNIpCg+TsVH17pqxWMi1mw==
+  dependencies:
+    "@hubbleprotocol/hubble-config" "^1.0.248"
     "@project-serum/anchor" "^0.21.0"
     "@project-serum/serum" "^0.13.65"
     "@solana/buffer-layout" "^4.0.0"
