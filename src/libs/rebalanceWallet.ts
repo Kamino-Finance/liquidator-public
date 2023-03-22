@@ -7,6 +7,7 @@ import BigNumber from 'bignumber.js';
 import { Token, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { PublicKey } from '@solana/web3.js';
 import { TokenCount } from 'global';
+import logger from 'services/logger';
 import swap from './swap';
 
 // Padding so we rebalance only when abs(target-actual)/target is greater than PADDING
@@ -40,7 +41,7 @@ export async function rebalanceWallet(connection, payer, jupiter, tokensOracle, 
 
     const USDCTokenInfo = findWhere(info, { symbol: 'USDC' });
     if (!USDCTokenInfo) {
-      console.error('failed to find USDC token info');
+      logger.error('failed to find USDC token info');
     }
 
     // negative diff means we need to buy
@@ -59,7 +60,7 @@ export async function rebalanceWallet(connection, payer, jupiter, tokensOracle, 
     try {
       await swap(connection, payer, jupiter, fromTokenInfo, toTokenInfo, Math.floor(amount.toNumber()));
     } catch (error) {
-      console.error({ error }, 'failed to swap tokens');
+      logger.error(error, 'failed to swap tokens');
     }
   }
 }

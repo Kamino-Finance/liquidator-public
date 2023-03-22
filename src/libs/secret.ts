@@ -1,4 +1,5 @@
 import fs from 'fs';
+import logger from 'services/logger';
 
 export function readSecret(secretName) {
   const path = process.env.SECRET_PATH || `/run/secrets/${secretName}`;
@@ -6,11 +7,11 @@ export function readSecret(secretName) {
     return fs.readFileSync(path, 'utf8');
   } catch (err) {
     if (err.code !== 'ENOENT') {
-      console.error(
+      logger.error(
         `An error occurred while trying to read the secret path: ${path}. Err: ${err}`,
       );
     } else {
-      console.debug(`Could not find the secret,: ${secretName}. Err: ${err}`);
+      logger.error(`Could not find the secret,: ${secretName}. Err: ${err}`);
     }
     return '';
   }

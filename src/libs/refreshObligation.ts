@@ -7,6 +7,7 @@ import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
 import { KaminoReserve, Obligation } from '@hubbleprotocol/kamino-lending-sdk';
 import { ObligationCollateral, ObligationLiquidity, U192 } from '@hubbleprotocol/kamino-lending-sdk/dist/types';
+import logger from 'services/logger';
 import { TokenOracleData } from './oracle';
 import { NULL_PUBKEY } from './utils';
 
@@ -110,7 +111,7 @@ function getBorrrowedAmountWadsWithInterest(
   switch (reserveCumulativeBorrowRateWads.comparedTo(obligationCumulativeBorrowRateWads)) {
     case -1: {
       // less than
-      console.error(`Interest rate cannot be negative.
+      logger.error(`Interest rate cannot be negative.
         reserveCumulativeBorrowRateWadsNum: ${reserveCumulativeBorrowRateWads.toString()} |
         obligationCumulativeBorrowRateWadsNum: ${obligationCumulativeBorrowRateWads.toString()}`);
       return obligationBorrowAmountWads;
@@ -125,7 +126,7 @@ function getBorrrowedAmountWadsWithInterest(
       return obligationBorrowAmountWads.multipliedBy(compoundInterestRate);
     }
     default: {
-      console.log(`Error: getBorrrowedAmountWadsWithInterest() identified invalid comparator.
+      logger.error(`Error: getBorrrowedAmountWadsWithInterest() identified invalid comparator.
       reserveCumulativeBorrowRateWadsNum: ${reserveCumulativeBorrowRateWads.toString()} |
       obligationCumulativeBorrowRateWadsNum: ${obligationCumulativeBorrowRateWads.toString()}`);
       return obligationBorrowAmountWads;

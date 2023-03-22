@@ -9,6 +9,7 @@ import {
   KaminoMarket, KaminoReserve,
 } from '@hubbleprotocol/kamino-lending-sdk';
 import { SolanaCluster } from '@hubbleprotocol/hubble-config';
+import logger from 'services/logger';
 
 dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
 
@@ -41,7 +42,11 @@ async function getTokenOracleData(connection: Connection, reserve: KaminoReserve
   if (oracle.pythAddress && oracle.pythAddress !== NULL_ORACLE && oracle.pythAddress !== PublicKey.default.toString()) {
     const pythPublicKey = new PublicKey(oracle.pythAddress);
     const result = await connection.getAccountInfo(pythPublicKey);
-    price = parsePriceData(result!.data).price;
+    try {
+      price = parsePriceData(result!.data).price;
+    } catch (error) {
+      logger.error('Error parsing pyth price data', error);
+    }
   } else if (oracle.switchboardFeedAddress && oracle.switchboardFeedAddress !== NULL_ORACLE && oracle.switchboardFeedAddress !== PublicKey.default.toString()) {
     const pricePublicKey = new PublicKey(oracle.switchboardFeedAddress);
     const info = await connection.getAccountInfo(pricePublicKey);
@@ -53,7 +58,7 @@ async function getTokenOracleData(connection: Connection, reserve: KaminoReserve
       const result = switchboardV2.decodeLatestAggregatorValue(info!);
       price = result?.toNumber();
     } else {
-      console.error('unrecognized switchboard owner address: ', owner);
+      logger.error('Unrecognized switchboard owner address: ', owner);
     }
   } else {
     const pricePublicKey = new PublicKey(oracle.scopeOracleAddress);
@@ -64,7 +69,7 @@ async function getTokenOracleData(connection: Connection, reserve: KaminoReserve
       const result = await scope.getPriceByMint(reserve.config.liquidityToken.mint);
       price = result?.price.toNumber();
     } else {
-      console.error('unrecognized scope owner address: ', owner);
+      logger.error('Unrecognized scope owner address: ', owner);
     }
   }
 

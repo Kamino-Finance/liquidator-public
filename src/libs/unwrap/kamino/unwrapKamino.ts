@@ -6,6 +6,7 @@ import {
   assignBlockInfoToTransaction, createTransactionWithExtraBudget, getAssociatedTokenAddressAndData, Kamino,
 } from '@hubbleprotocol/kamino-sdk';
 import { getConfigByCluster, SolanaCluster } from '@hubbleprotocol/hubble-config';
+import logger from 'services/logger';
 
 const cluster = process.env.APP as SolanaCluster;
 
@@ -18,7 +19,7 @@ export const checkAndUnwrapKaminoTokens = async (
   for (const strategyPubkey of config.kamino.strategies) {
     const strategy = await kamino.getStrategyByAddress(strategyPubkey);
     if (!strategy) {
-      console.error('Could not fetch strategy from the chain');
+      logger.error(`Could not fetch strategy ${strategyPubkey.toString()} from the chain`);
       continue;
     }
     const strategyWithAddress = { strategy, address: strategyPubkey };
@@ -55,7 +56,7 @@ export const checkAndUnwrapKaminoTokens = async (
         commitment: 'confirmed',
       });
 
-      console.log(`successfully withdrew Kamino shares from strategy (${strategyPubkey.toString()}): ${txHash}`);
+      logger.info(`Successfully withdrew Kamino shares from strategy (${strategyPubkey.toString()}): ${txHash}`);
     }
   }
 };

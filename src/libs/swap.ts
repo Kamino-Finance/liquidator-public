@@ -3,16 +3,13 @@ import { Jupiter } from '@jup-ag/core';
 import {
   Connection, Keypair, PublicKey,
 } from '@solana/web3.js';
+import logger from 'services/logger';
 
 const SLIPPAGE = 2;
 const SWAP_TIMEOUT_SEC = 20;
 
 export default async function swap(connection: Connection, wallet: Keypair, jupiter: Jupiter, fromTokenInfo, toTokenInfo, amount: number) {
-  console.log({
-    fromToken: fromTokenInfo.symbol,
-    toToken: toTokenInfo.symbol,
-    amount: amount.toString(),
-  }, 'swapping tokens');
+  logger.info(`Swapping ${amount} ${fromTokenInfo.symbol} to ${toTokenInfo.symbol}...`);
 
   const inputMint = new PublicKey(fromTokenInfo.mintAddress);
   const outputMint = new PublicKey(toTokenInfo.mintAddress);
@@ -35,7 +32,7 @@ export default async function swap(connection: Connection, wallet: Keypair, jupi
       let timedOut = false;
       const timeoutHandle = setTimeout(() => {
         timedOut = true;
-        console.error(`Swap took longer than ${SWAP_TIMEOUT_SEC} seconds to complete.`);
+        logger.warn(`Swap took longer than ${SWAP_TIMEOUT_SEC} seconds to complete.`);
         reject('Swap timed out');
       }, SWAP_TIMEOUT_SEC * 1000);
 
@@ -43,31 +40,18 @@ export default async function swap(connection: Connection, wallet: Keypair, jupi
         if (!timedOut) {
           clearTimeout(timeoutHandle);
 
-          console.log({
-            tx: swapResult.txid,
-            inputAddress: swapResult.inputAddress.toString(),
-            outputAddress: swapResult.outputAddress.toString(),
-            inputAmount: swapResult.inputAmount / fromTokenInfo.decimals,
-            outputAmount: swapResult.outputAmount / toTokenInfo.decimals,
-            inputToken: fromTokenInfo.symbol,
-            outputToken: toTokenInfo.symbol,
-          }, 'successfully swapped token');
+          logger.info(`Successfully swapped ${swapResult.inputAmount / fromTokenInfo.decimals} ${fromTokenInfo.symbol} (mint address ${swapResult.inputAddress.toString()}) to ${swapResult.outputAmount / toTokenInfo.decimals} ${toTokenInfo.symbol} (mint address ${swapResult.outputAddress.toString()}) in tx ${swapResult.txid}`);
           resolve(swapResult);
         }
       }).catch((swapError) => {
         if (!timedOut) {
           clearTimeout(timeoutHandle);
-          console.error({
-            err: swapError.error,
-            tx: swapError.txid,
-            fromToken: fromTokenInfo.symbol,
-            toToken: toTokenInfo.symbol,
-          }, 'error swapping');
+          logger.error(`Error swapping ${swapError.error} while swapping tx ${swapError.txid} from ${fromTokenInfo.symbol} -> to ${toTokenInfo.symbol}`);
           resolve(swapError);
         }
       });
     });
   } catch (e) {
-    console.log(`No routes found for ${fromTokenInfo.symbol} -> ${toTokenInfo.symbol} `, e);
+    logger.error(`No routes found for ${fromTokenInfo.symbol} -> ${toTokenInfo.symbol} `, e);
   }
 }

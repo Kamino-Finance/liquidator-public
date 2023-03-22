@@ -2,6 +2,7 @@
 import got from 'got';
 import dotenv from 'dotenv';
 import { MarketConfigType } from '@hubbleprotocol/kamino-lending-sdk';
+import logger from 'services/logger';
 
 dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
 
@@ -46,7 +47,7 @@ export async function getMarkets(): Promise<MarketConfigType[]> {
       const data = resp.body as MarketConfigType[];
       return data;
     } catch (error) {
-      console.error('error fetching /kamino-market ', error);
+      logger.error('Error fetching /kamino-market from API', error);
     }
   } while (attemptCount < maxAttempt);
 
