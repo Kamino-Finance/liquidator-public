@@ -1,7 +1,7 @@
 import fs from 'fs';
 import logger from 'services/logger';
 
-export function readSecret(secretName) {
+export function readSecret(secretName: string) {
   const path = process.env.SECRET_PATH || `/run/secrets/${secretName}`;
   try {
     return fs.readFileSync(path, 'utf8');

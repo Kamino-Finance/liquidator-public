@@ -1,12 +1,18 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable no-restricted-syntax */
 import { KaminoMarket } from '@hubbleprotocol/kamino-lending-sdk';
-import { ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import { Connection, PublicKey } from '@solana/web3.js';
+import { sleep } from '@hubbleprotocol/kamino-sdk/dist/utils';
+import {
+  ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, Token, NATIVE_MINT,
+} from '@solana/spl-token';
+import {
+  Connection, Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction,
+} from '@solana/web3.js';
 import BigNumber from 'bignumber.js';
 import {
   LiquidityToken, TokenCount,
 } from 'global';
+import logger from 'services/logger';
 import { findWhere } from 'underscore';
 import { TokenOracleData } from './oracle';
 
@@ -75,7 +81,7 @@ export function getTokenInfo(market: KaminoMarket, symbol: string) {
 }
 
 export function getTokenInfoFromMarket(market: KaminoMarket, symbol: string) {
-  const liquidityToken: LiquidityToken = findWhere(market.reserves.map((reserve) => reserve.config.liquidityToken), { symbol });
+  const liquidityToken: LiquidityToken | undefined = findWhere(market.reserves.map((reserve) => reserve.config.liquidityToken), { symbol });
   if (!liquidityToken) {
     throw new Error(`Could not find ${symbol} in config.assets`);
   }
@@ -119,19 +125,20 @@ function stripEnd(s: string, c: string) {
   return s.slice(0, i + 1);
 }
 
-export async function getWalletBalances(connection, wallet, tokensOracle, market) {
-  const promises: Promise<any>[] = [];
-  for (const [key, value] of Object.entries(tokensOracle)) {
+export async function getWalletBalances(connection: Connection, wallet: Keypair, tokensOracle: TokenOracleData[], market: KaminoMarket) {
+  const walletBalances: TokenBalance[] = [];
+  for (const [, value] of Object.entries(tokensOracle)) {
     if (value) {
       const tokenOracleData = value as TokenOracleData;
-      promises.push(getWalletTokenData(connection, market, wallet, tokenOracleData.mintAddress, tokenOracleData.symbol));
+      const tokenBalance = await getWalletTokenData(connection, market, wallet, tokenOracleData.mintAddress, tokenOracleData.symbol);
+      walletBalances.push(tokenBalance);
     }
   }
-  const walletBalances = await Promise.all(promises);
+
   return walletBalances;
 }
 
-export async function getWalletTokenData(connection: Connection, market: KaminoMarket, wallet, mintAddress, symbol) {
+export async function getWalletTokenData(connection: Connection, market: KaminoMarket, wallet: any, mintAddress: string, symbol: string): Promise<TokenBalance> {
   const token = new Token(
     connection,
     new PublicKey(mintAddress),
@@ -145,21 +152,40 @@ export async function getWalletTokenData(connection: Connection, market: KaminoM
     wallet.publicKey,
   );
 
+  const tokenAccountInfo = await connection.getAccountInfo(userTokenAccount);
   try {
-    const result = await token.getAccountInfo(userTokenAccount);
-    const balance = toHuman(market, result!.amount.toString(), symbol);
-    const balanceBase = result!.amount.toString();
+    if (tokenAccountInfo === null) {
+    // TODO: Handle createWSOLAccount case in the case of SOL
+      const createAtaIx = await Token.createAssociatedTokenAccountInstruction(
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+        TOKEN_PROGRAM_ID,
+        new PublicKey(mintAddress),
+        userTokenAccount,
+        wallet.publicKey,
+        wallet.publicKey,
+      );
 
+      const tx = new Transaction().add(createAtaIx);
+      const signature = await connection.sendTransaction(tx, [wallet]);
+      confirmTx(connection, signature);
+      await sleep(3000);
+    }
+    const newResult = await token.getAccountInfo(userTokenAccount);
+    const balance = toHuman(market, newResult!.amount.toString(), symbol);
+    const balanceBase = newResult!.amount.toString();
     return {
       balance: Number(balance),
       balanceBase: Number(balanceBase),
       symbol,
+      ata: userTokenAccount.toBase58(),
     };
   } catch (e) {
+    logger.error(`Error ${e}, tokenAccountCreation failed for ${symbol}`);
     return {
-      balance: -1, // sentinel value
-      balanceBase: -1, // sentinel value
+      balance: -1,
+      balanceBase: -1,
       symbol,
+      ata: '',
     };
   }
 }
@@ -168,7 +194,7 @@ export const findAssociatedTokenAddress = async (
   walletAddress: PublicKey,
   tokenMintAddress: PublicKey,
 ) => (
-  await PublicKey.findProgramAddress(
+  await PublicKey.findProgramAddressSync(
     [walletAddress.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), tokenMintAddress.toBuffer()],
     ASSOCIATED_TOKEN_PROGRAM_ID,
   )
@@ -210,4 +236,90 @@ export function getWalletDistTarget() {
   }
 
   return target;
+}
+
+export async function confirmTx(connection: Connection, txHash: string) {
+  const blockhashInfo = await connection.getLatestBlockhash();
+  await connection.confirmTransaction({
+    blockhash: blockhashInfo.blockhash,
+    lastValidBlockHeight: blockhashInfo.lastValidBlockHeight,
+    signature: txHash,
+  });
+}
+
+export type TokenBalance = {
+  symbol: string;
+  balance: number;
+  balanceBase: number;
+  ata: string;
+};
+
+export async function createWSOLAccountInstrs(
+  connection: Connection,
+  owner: PublicKey,
+  amount: number,
+): Promise<[TransactionInstruction[], PublicKey]> {
+  const toAccount = await Token.getAssociatedTokenAddress(
+    ASSOCIATED_TOKEN_PROGRAM_ID,
+    TOKEN_PROGRAM_ID,
+    NATIVE_MINT,
+    owner,
+  );
+  const info = await connection.getAccountInfo(toAccount);
+  const instructions: TransactionInstruction[] = [];
+
+  if (info === null) {
+    instructions.push(
+      Token.createAssociatedTokenAccountInstruction(
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+        TOKEN_PROGRAM_ID,
+        NATIVE_MINT,
+        toAccount,
+        owner,
+        owner,
+      ),
+    );
+  }
+
+  // Fund account and sync
+  if (amount > 0) {
+    instructions.push(
+      SystemProgram.transfer({
+        fromPubkey: owner,
+        toPubkey: toAccount,
+        lamports: amount,
+      }),
+    );
+  }
+  instructions.push(
+    // Sync Native instruction. @solana/spl-token will release it soon. Here use the raw instruction temporally.
+    new TransactionInstruction({
+      keys: [
+        {
+          pubkey: toAccount,
+          isSigner: false,
+          isWritable: true,
+        },
+      ],
+      data: Buffer.from(new Uint8Array([17])),
+      programId: TOKEN_PROGRAM_ID,
+    }),
+  );
+
+  return [instructions, toAccount];
+}
+
+export async function createWSOLAccount(
+  connection: Connection,
+  payer: Keypair,
+  amount: number,
+): Promise<PublicKey> {
+  const tx = new Transaction();
+  const [ixs, wsolAddress] = await createWSOLAccountInstrs(connection, payer.publicKey, amount);
+
+  tx.add(...ixs);
+  const txHash = await connection.sendTransaction(tx, [payer]);
+  confirmTx(connection, txHash);
+
+  return wsolAddress;
 }

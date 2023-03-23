@@ -3,12 +3,13 @@ import { Jupiter } from '@jup-ag/core';
 import {
   Connection, Keypair, PublicKey,
 } from '@solana/web3.js';
+import { TokenInfo } from 'global';
 import logger from 'services/logger';
 
 const SLIPPAGE = 2;
 const SWAP_TIMEOUT_SEC = 20;
 
-export default async function swap(connection: Connection, wallet: Keypair, jupiter: Jupiter, fromTokenInfo, toTokenInfo, amount: number) {
+export default async function swap(connection: Connection, wallet: Keypair, jupiter: Jupiter, fromTokenInfo: TokenInfo, toTokenInfo: TokenInfo, amount: number) {
   logger.info(`Swapping ${amount} ${fromTokenInfo.symbol} to ${toTokenInfo.symbol}...`);
 
   const inputMint = new PublicKey(fromTokenInfo.mintAddress);

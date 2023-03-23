@@ -5,15 +5,18 @@
 import { findWhere } from 'underscore';
 import BigNumber from 'bignumber.js';
 import { Token, TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import { PublicKey } from '@solana/web3.js';
-import { TokenCount } from 'global';
+import { Connection, Keypair, PublicKey } from '@solana/web3.js';
+import { TokenCount, TokenInfo } from 'global';
 import logger from 'services/logger';
+import { Jupiter } from '@jup-ag/core';
 import swap from './swap';
+import { TokenBalance } from './utils';
+import { TokenOracleData } from './oracle';
 
 // Padding so we rebalance only when abs(target-actual)/target is greater than PADDING
 const PADDING = Number(process.env.REBALANCE_PADDING) || 0.2;
 
-export async function rebalanceWallet(connection, payer, jupiter, tokensOracle, walletBalances, target) {
+export async function rebalanceWallet(connection: Connection, payer: Keypair, jupiter: Jupiter, tokensOracle: TokenOracleData[], walletBalances: TokenBalance[], target: TokenCount[]) {
   const info = await aggregateInfo(tokensOracle, walletBalances, connection, payer, target);
   // calculate token diff between current & target value
   info.forEach((tokenInfo) => {
@@ -48,7 +51,7 @@ export async function rebalanceWallet(connection, payer, jupiter, tokensOracle, 
     if (tokenInfo.diff < 0) {
       fromTokenInfo = USDCTokenInfo;
       toTokenInfo = tokenInfo;
-      amount = (new BigNumber(tokenInfo.diffUSD).multipliedBy(fromTokenInfo.decimals)).abs();
+      amount = (new BigNumber(tokenInfo.diffUSD).multipliedBy(fromTokenInfo!.decimals)).abs();
 
       // positive diff means we sell
     } else {
@@ -58,21 +61,21 @@ export async function rebalanceWallet(connection, payer, jupiter, tokensOracle, 
     }
 
     try {
-      await swap(connection, payer, jupiter, fromTokenInfo, toTokenInfo, Math.floor(amount.toNumber()));
+      await swap(connection, payer, jupiter, fromTokenInfo!, toTokenInfo!, Math.floor(amount.toNumber()));
     } catch (error) {
       logger.error(error, 'failed to swap tokens');
     }
   }
 }
 
-function aggregateInfo(tokensOracle, walletBalances, connection, wallet, target) {
-  const info: any = [];
+function aggregateInfo(tokensOracle: TokenOracleData[], walletBalances: TokenBalance[], connection: Connection, wallet: Keypair, target: TokenCount[]) {
+  const info: TokenInfo[] = [];
   target.forEach(async (tokenDistribution: TokenCount) => {
     const { symbol, target } = tokenDistribution;
     const tokenOracle = findWhere(tokensOracle, { symbol });
     const walletBalance = findWhere(walletBalances, { symbol });
 
-    if (walletBalance) {
+    if (walletBalance && tokenOracle) {
       // -1 as sentinel value for account not available
       if (walletBalance.balance === -1) {
         const token = new Token(
@@ -97,8 +100,10 @@ function aggregateInfo(tokensOracle, walletBalances, connection, wallet, target)
         balance: walletBalance.balance,
         usdValue: usdValue.toNumber(),
         price: tokenOracle.price.toNumber(),
-        decimals: tokenOracle.decimals,
+        decimals: tokenOracle.decimals.toNumber(),
         reserveAddress: tokenOracle.reserveAddress,
+        diff: 0,
+        diffUSD: 0,
       });
     }
   });

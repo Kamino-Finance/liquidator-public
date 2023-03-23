@@ -35,7 +35,6 @@ module.exports = {
       },
     ],
     '@typescript-eslint/no-var-requires': 'warn',
-    '@typescript-eslint/no-explicit-any': 0,
     '@typescript-eslint/explicit-module-boundary-types': 0,
     '@typescript-eslint/no-use-before-define': 0,
     '@typescript-eslint/naming-convention': [

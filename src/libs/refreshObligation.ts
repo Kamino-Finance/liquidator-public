@@ -32,11 +32,16 @@ export function calculateRefreshedObligation(
     const tokenOracle = findWhere(tokensOracle, { reserveAddress: deposit.depositReserve.toString() });
     if (!tokenOracle) {
       // eslint-disable-next-line @typescript-eslint/no-throw-literal
-      throw `Missing token info for reserve ${deposit.depositReserve.toString()}, skipping this obligation. Please restart liquidator to fetch latest configs from /v1/config`;
+      throw `Missing token info for reserve ${deposit.depositReserve.toString()}, skipping this obligation. Please restart liquidator to fetch latest configs api`;
     }
     const { price, decimals, symbol } = tokenOracle;
-    const reserve: KaminoReserve = find(reserves, (r: KaminoReserve) => r.config.address.toString() === deposit.depositReserve.toString());
-    const { cTokenExchangeRate, loanToValueRatio, liquidationThreshold } = reserve.stats!;
+    const reserve: KaminoReserve | undefined = find(reserves, (r: KaminoReserve) => r.config.address.toString() === deposit.depositReserve.toString());
+
+    if (!reserve) {
+      logger.error(`Missing reserve info for reserve ${deposit.depositReserve.toString()}, skipping this obligation.`);
+    }
+
+    const { cTokenExchangeRate, loanToValueRatio, liquidationThreshold } = reserve!.stats!;
     const marketValue = new BigNumber(deposit.depositedAmount.toString())
       .multipliedBy(WAD)
       .dividedBy(cTokenExchangeRate)
@@ -66,7 +71,12 @@ export function calculateRefreshedObligation(
     const {
       price, decimals, symbol, mintAddress,
     } = tokenOracle;
-    const reserve: KaminoReserve = find(reserves, (r: KaminoReserve) => r.config.address.toString() === borrow.borrowReserve.toString());
+    const reserve: KaminoReserve | undefined = find(reserves, (r: KaminoReserve) => r.config.address.toString() === borrow.borrowReserve.toString());
+
+    if (!reserve) {
+      logger.error(`Missing reserve info for reserve ${borrow.borrowReserve.toString()}, skipping this obligation. Please restart liquidator to fetch latest config from /v1/config.`);
+    }
+
     const cumulativeBorrowRateWadsObligation = u192ToBN(borrow.cumulativeBorrowRateWads);
     const borrowAmountWadsWithInterest = getBorrrowedAmountWadsWithInterest(
       new BigNumber(reserve!.stats!.cumulativeBorrowRateWads.toString()),

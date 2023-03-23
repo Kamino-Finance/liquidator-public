@@ -1,10 +1,11 @@
 /* eslint-disable no-continue */
 /* eslint-disable no-restricted-syntax */
 import {
-  Connection, Keypair, PublicKey,
+  Connection, Keypair, LAMPORTS_PER_SOL, PublicKey,
 } from '@solana/web3.js';
 import dotenv from 'dotenv';
 import {
+  createWSOLAccount,
   getWalletBalances,
   getWalletDistTarget,
   getWalletTokenData,
@@ -14,9 +15,9 @@ import { getTokensOracleData } from 'libs/oracle';
 import { calculateRefreshedObligation } from 'libs/refreshObligation';
 import { readSecret } from 'libs/secret';
 import { liquidateAndRedeem } from 'libs/actions/liquidateAndRedeem';
-// import { rebalanceWallet } from 'libs/rebalanceWallet';
+import { rebalanceWallet } from 'libs/rebalanceWallet';
 import { Jupiter } from '@jup-ag/core';
-// import { unwrapTokens } from 'libs/unwrap/unwrapToken';
+import { unwrapTokens } from 'libs/unwrap/unwrapToken';
 import express from 'express';
 import {
   KaminoMarket, ENV, KAMINO_LENDING_DEVNET_PROGRAM_ID, Obligation,
@@ -69,6 +70,9 @@ async function runLiquidator() {
 
       const tokensOracle = await getTokensOracleData(connection, kaminoMarket);
       const allObligations = await getAllObligationsForMarket(kaminoMarket, connection);
+      const walletBalances = await getWalletBalances(connection, payer, tokensOracle, kaminoMarket);
+
+      logger.info(`Liquidator looping through ${allObligations.length} obligations for market: ${market.lendingMarket}`);
 
       // TODO: Improve error handling & logging
       // eslint-disable-next-line prefer-const
@@ -89,33 +93,33 @@ async function runLiquidator() {
             }
 
             // select repay token that has the highest market value
-            let selectedBorrow;
+            let selectedBorrow: any;
             borrows.forEach((borrow) => {
               if (
                 !selectedBorrow
-                                  || borrow.marketValue.gt(selectedBorrow.marketValue)
+                                      || borrow.marketValue.gt(selectedBorrow.marketValue)
               ) {
                 selectedBorrow = borrow;
               }
             });
 
             // select the withdrawal collateral token with the highest market value
-            let selectedDeposit;
+            let selectedDeposit: any;
             deposits.forEach((deposit) => {
               if (
                 !selectedDeposit
-                                  || deposit.marketValue.gt(selectedDeposit.marketValue)
+                                      || deposit.marketValue.gt(selectedDeposit.marketValue)
               ) {
                 selectedDeposit = deposit;
               }
             });
 
             if (!selectedBorrow || !selectedDeposit) {
-              // skip toxic obligations caused by toxic oracle data
+            // skip toxic obligations caused by toxic oracle data
               break;
             }
 
-            logger.info({
+            logger.warn({
               message: `Obligation ${obligationAddress.toString()} is underwater`,
               borrowedValue: `${borrowedValue.toString()}`,
               unhealthyBorrowValue: `${unhealthyBorrowValue.toString()}`,
@@ -123,7 +127,7 @@ async function runLiquidator() {
             });
 
             // get wallet balance for selected borrow token
-            const { balanceBase } = await getWalletTokenData(
+            const { balanceBase, symbol } = await getWalletTokenData(
               connection,
               kaminoMarket,
               payer,
@@ -138,6 +142,9 @@ async function runLiquidator() {
                   market.lendingMarket
                 }`,
               );
+              if (symbol === 'SOL') {
+                createWSOLAccount(connection, payer, 10 * LAMPORTS_PER_SOL); // TODO: Hardcoded 10 SOL value
+              }
               break;
             } else if (balanceBase < 0) {
               logger.warn(`failed to get wallet balance for ${
@@ -145,9 +152,14 @@ async function runLiquidator() {
               } to liquidate obligation ${obligationAddress.toString()} in market: ${
                 market.lendingMarket
               }. 
-                                Potentially network error or token account does not exist in wallet`);
+                                    Potentially network error or token account does not exist in wallet`);
               break;
             }
+
+            const kaminoObligation = {
+              pubkey: obligationAddress,
+              info: obligation,
+            };
 
             // Set super high liquidation amount which acts as u64::MAX as program will only liquidate max
             // 50% val of all borrowed assets.
@@ -158,7 +170,7 @@ async function runLiquidator() {
               selectedBorrow.symbol,
               selectedDeposit.symbol,
               kaminoMarket,
-              obligation,
+              kaminoObligation,
             );
 
             const postLiquidationObligation = await connection.getAccountInfo(
@@ -169,20 +181,17 @@ async function runLiquidator() {
           }
         } catch (err) {
           logger.error(
-            {
-              message: `error liquidating ${obligationAddress.toString()}: `,
-              err,
-            },
+            `Error ${err} liquidating obligation ${obligationAddress.toString()}`,
           );
           continue;
         }
       }
-      // TODO: Fix this, it fails
-      // await unwrapTokens(connectijon, payer);
+      if (cluster === 'mainnet-beta') {
+        await unwrapTokens(connection, payer);
+      }
 
       if (target.length > 0 && cluster === 'mainnet-beta') {
-        const walletBalances = await getWalletBalances(connection, payer, tokensOracle, market);
-      //   await rebalanceWallet(connection, payer, jupiter, tokensOracle, walletBalances, target);
+        await rebalanceWallet(connection, payer, jupiter, tokensOracle, walletBalances, target);
       }
 
       // Throttle to avoid rate limiter

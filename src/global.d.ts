@@ -9,6 +9,20 @@ export interface LiquidityToken {
 }
 
 export interface TokenCount {
-  symbol: String,
+  symbol: string,
   target: number,
+}
+
+export interface TokenInfo {
+  symbol: string;
+  target: number;
+  mintAddress: string;
+  ata: string;
+  balance: number;
+  usdValue: number;
+  price: number;
+  decimals: number;
+  reserveAddress: string;
+  diff: number;
+  diffUSD: number;
 }

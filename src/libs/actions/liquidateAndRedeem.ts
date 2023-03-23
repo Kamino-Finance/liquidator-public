@@ -11,11 +11,12 @@ import {
 import {
   getTokenInfoFromMarket,
 } from 'libs/utils';
-import { findWhere, map } from 'underscore';
+import { map } from 'underscore';
 import {
-  ReserveConfigType, refreshReserve as refreshReserveInstruction, liquidateObligationAndRedeemReserveCollateral, refreshObligation as refreshObligationInstruction, KaminoMarket,
+  ReserveConfigType, refreshReserve as refreshReserveInstruction, liquidateObligationAndRedeemReserveCollateral, refreshObligation as refreshObligationInstruction, KaminoMarket, KaminoReserve, Obligation,
 } from '@hubbleprotocol/kamino-lending-sdk';
 import BN from 'bn.js';
+import { ObligationCollateral, ObligationLiquidity } from '@hubbleprotocol/kamino-lending-sdk/dist/types';
 
 export const liquidateAndRedeem = async (
   connection: Connection,
@@ -24,23 +25,25 @@ export const liquidateAndRedeem = async (
   repayTokenSymbol: string,
   withdrawTokenSymbol: string,
   lendingMarket: KaminoMarket,
-  obligation: any,
+  obligation: KaminoObligation,
 ) => {
   const ixs: TransactionInstruction[] = [];
+  const depositReserves = obligation.info.deposits.filter((deposit: ObligationCollateral) => deposit.depositReserve.toString() !== PublicKey.default.toString()).map((deposit: ObligationCollateral) => deposit.depositReserve);
+  const borrowReserves = obligation.info.borrows.filter((borrow: ObligationLiquidity) => borrow.borrowReserve.toString() !== PublicKey.default.toString()).map((borrow: ObligationLiquidity) => borrow.borrowReserve);
 
-  const depositReserves = map(obligation.info.deposits, (deposit) => deposit.depositReserve);
-  const borrowReserves = map(obligation.info.borrows, (borrow) => borrow.borrowReserve);
   const uniqReserveAddresses = [...new Set<String>(map(depositReserves.concat(borrowReserves), (reserve) => reserve.toString()))];
   uniqReserveAddresses.forEach((reserveAddress) => {
-    const reserveInfo: ReserveConfigType = findWhere(lendingMarket!.reserves, {
-      address: reserveAddress,
-    });
+    const kaminoReserve = lendingMarket.reserves.find((res: KaminoReserve) => res.config.address === reserveAddress);
+    if (!kaminoReserve) {
+      throw new Error(`Missing reserve info for reserve ${reserveAddress}, cannot liquidate.`);
+    }
+
     const refreshReserveIx = refreshReserveInstruction({
       reserve: new PublicKey(reserveAddress),
-      pythOracle: new PublicKey(reserveInfo.pythOracle),
-      switchboardPriceOracle: new PublicKey(reserveInfo.switchboardOracle),
-      switchboardTwapOracle: new PublicKey(reserveInfo.switchboardTwapOracle),
-      scopePrices: new PublicKey(reserveInfo.scopeOracle),
+      pythOracle: new PublicKey(kaminoReserve.config.pythOracle),
+      switchboardPriceOracle: new PublicKey(kaminoReserve.config.switchboardOracle),
+      switchboardTwapOracle: new PublicKey(kaminoReserve.config.switchboardTwapOracle),
+      scopePrices: new PublicKey(kaminoReserve.config.scopeOracle),
     });
     ixs.push(refreshReserveIx);
   });
@@ -150,4 +153,9 @@ export const liquidateAndRedeem = async (
 
   const txHash = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false });
   await connection.confirmTransaction(txHash, 'processed');
+};
+
+export type KaminoObligation = {
+  pubkey: PublicKey;
+  info: Obligation;
 };
