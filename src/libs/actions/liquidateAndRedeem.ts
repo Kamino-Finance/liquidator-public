@@ -17,6 +17,7 @@ import {
 } from '@hubbleprotocol/kamino-lending-sdk';
 import BN from 'bn.js';
 import { ObligationCollateral, ObligationLiquidity } from '@hubbleprotocol/kamino-lending-sdk/dist/types';
+import logger from 'services/logger';
 
 export const liquidateAndRedeem = async (
   connection: Connection,
@@ -152,6 +153,7 @@ export const liquidateAndRedeem = async (
   tx.sign(payer);
 
   const txHash = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false });
+  logger.info('Liquidation went successfully, tx signature', txHash);
   await connection.confirmTransaction(txHash, 'processed');
 };
 
