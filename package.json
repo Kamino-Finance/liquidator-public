@@ -18,6 +18,7 @@
   ],
   "license": "ISC",
   "dependencies": {
+    "@coral-xyz/borsh": "^0.27.0",
     "@hubbleprotocol/hubble-config": "^1.0.127",
     "@hubbleprotocol/kamino-lending-sdk": "^2.3.0",
     "@hubbleprotocol/kamino-sdk": "^1.0.131",
