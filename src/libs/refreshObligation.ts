@@ -1,8 +1,5 @@
 import BigNumber from 'bignumber.js';
 import { findWhere, find } from 'underscore';
-import {
-  WAD,
-} from 'models/layouts/reserve';
 import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
 import { KaminoReserve, Obligation } from '@hubbleprotocol/kamino-lending-sdk';
@@ -11,7 +8,7 @@ import logger from 'services/logger';
 import { TokenOracleData } from './oracle';
 import { NULL_PUBKEY } from './utils';
 
-export const RISKY_OBLIGATION_THRESHOLD = 78;
+export const WAD = new BigNumber(1000000000000000000);
 
 // This function doesn't actually refresh the obligation within the blockchain
 // but does offchain calculation which mimics the actual refreshObligation instruction

@@ -1,11 +1,10 @@
 /* eslint-disable no-continue */
 /* eslint-disable no-restricted-syntax */
 import {
-  Connection, Keypair, LAMPORTS_PER_SOL, PublicKey,
+  Connection, Keypair, PublicKey,
 } from '@solana/web3.js';
 import dotenv from 'dotenv';
 import {
-  createWSOLAccount,
   getWalletBalances,
   getWalletDistTarget,
   getWalletTokenData,
@@ -17,7 +16,7 @@ import { readSecret } from 'libs/secret';
 import { liquidateAndRedeem } from 'libs/actions/liquidateAndRedeem';
 import { rebalanceWallet } from 'libs/rebalanceWallet';
 import { Jupiter } from '@jup-ag/core';
-import { unwrapTokens } from 'libs/unwrap/unwrapToken';
+// import { unwrapTokens } from 'libs/unwrap/unwrapToken';
 import express from 'express';
 import {
   KaminoMarket, ENV, KAMINO_LENDING_DEVNET_PROGRAM_ID, Obligation,
@@ -127,7 +126,7 @@ async function runLiquidator() {
             });
 
             // get wallet balance for selected borrow token
-            const { balanceBase, symbol } = await getWalletTokenData(
+            const { balanceBase } = await getWalletTokenData(
               connection,
               kaminoMarket,
               payer,
@@ -142,10 +141,6 @@ async function runLiquidator() {
                   market.lendingMarket
                 }`,
               );
-              if (symbol === 'SOL') {
-                createWSOLAccount(connection, payer, 10 * LAMPORTS_PER_SOL); // TODO: Hardcoded 10 SOL value
-              }
-              break;
             } else if (balanceBase < 0) {
               logger.warn(`failed to get wallet balance for ${
                 selectedBorrow.symbol
@@ -186,9 +181,9 @@ async function runLiquidator() {
           continue;
         }
       }
-      if (cluster === 'mainnet-beta') {
-        await unwrapTokens(connection, payer);
-      }
+      // if (cluster === 'mainnet-beta') {
+      //   await unwrapTokens(connection, payer);
+      // }
 
       if (target.length > 0 && cluster === 'mainnet-beta') {
         await rebalanceWallet(connection, payer, jupiter, tokensOracle, walletBalances, target);

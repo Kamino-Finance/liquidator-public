@@ -101,6 +101,8 @@ export const liquidateAndRedeem = async (
     );
     ixs.push(createUserCollateralAccountIx);
   }
+  const rewardedWithdrawCollateralBalance = await connection.getTokenAccountBalance(rewardedWithdrawalCollateralAccount);
+  logger.info(`rewardedCollateralBalance before: ${rewardedWithdrawCollateralBalance.value.uiAmountString}`);
 
   const rewardedWithdrawalLiquidityAccount = await Token.getAssociatedTokenAddress(
     ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -122,6 +124,8 @@ export const liquidateAndRedeem = async (
     );
     ixs.push(createUserCollateralAccountIx);
   }
+  const rewardedWithdrawLiquidityBalance = await connection.getTokenAccountBalance(rewardedWithdrawalLiquidityAccount);
+  logger.info(`rewardedLiquidityBalance before: ${rewardedWithdrawLiquidityBalance.value.uiAmountString}`);
 
   ixs.push(
     liquidateObligationAndRedeemReserveCollateral({
@@ -153,8 +157,14 @@ export const liquidateAndRedeem = async (
   tx.sign(payer);
 
   const txHash = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false });
-  logger.info('Liquidation went successfully, tx signature', txHash);
   await connection.confirmTransaction(txHash, 'processed');
+  logger.info(`Liquidation went successfully, tx signature, ${txHash.toString()}`);
+
+  const rewardedWithdrawCollateralBalanceAfter = await connection.getTokenAccountBalance(rewardedWithdrawalCollateralAccount);
+  logger.info(`rewardedCollateralBalance after: ${rewardedWithdrawCollateralBalanceAfter.value.uiAmountString}`);
+
+  const rewardedWithdrawLiquidityBalanceAfter = await connection.getTokenAccountBalance(rewardedWithdrawalLiquidityAccount);
+  logger.info(`rewardedLiquidityBalance after: ${rewardedWithdrawLiquidityBalanceAfter.value.uiAmountString}`);
 };
 
 export type KaminoObligation = {

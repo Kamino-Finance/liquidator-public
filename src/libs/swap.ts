@@ -10,7 +10,8 @@ const SLIPPAGE = 2;
 const SWAP_TIMEOUT_SEC = 20;
 
 export default async function swap(connection: Connection, wallet: Keypair, jupiter: Jupiter, fromTokenInfo: TokenInfo, toTokenInfo: TokenInfo, amount: number) {
-  logger.info(`Swapping ${amount} ${fromTokenInfo.symbol} to ${toTokenInfo.symbol}...`);
+  const swapAmount = Math.min(amount, fromTokenInfo.balance);
+  logger.info(`Swapping ${swapAmount} ${fromTokenInfo.symbol} to ${toTokenInfo.symbol}...`);
 
   const inputMint = new PublicKey(fromTokenInfo.mintAddress);
   const outputMint = new PublicKey(toTokenInfo.mintAddress);
@@ -18,7 +19,7 @@ export default async function swap(connection: Connection, wallet: Keypair, jupi
     const routes = await jupiter.computeRoutes({
       inputMint, // Mint address of the input token
       outputMint, // Mint address of the output token
-      inputAmount: amount, // raw input amount of tokens
+      inputAmount: swapAmount, // raw input amount of tokens
       slippage: SLIPPAGE, // The slippage in % terms
     });
 

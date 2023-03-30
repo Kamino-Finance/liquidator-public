@@ -155,7 +155,6 @@ export async function getWalletTokenData(connection: Connection, market: KaminoM
   const tokenAccountInfo = await connection.getAccountInfo(userTokenAccount);
   try {
     if (tokenAccountInfo === null) {
-    // TODO: Handle createWSOLAccount case in the case of SOL
       const createAtaIx = await Token.createAssociatedTokenAccountInstruction(
         ASSOCIATED_TOKEN_PROGRAM_ID,
         TOKEN_PROGRAM_ID,
@@ -169,6 +168,14 @@ export async function getWalletTokenData(connection: Connection, market: KaminoM
       const signature = await connection.sendTransaction(tx, [wallet]);
       confirmTx(connection, signature);
       await sleep(3000);
+    }
+
+    if (symbol === 'SOL') {
+      const wsolBalance = await token.getAccountInfo(userTokenAccount);
+      if (wsolBalance?.amount.toNumber() === 0) {
+        const solBalance = await connection.getBalance(wallet.publicKey);
+        await createWSOLAccount(connection, wallet, solBalance / 2);
+      }
     }
     const newResult = await token.getAccountInfo(userTokenAccount);
     const balance = toHuman(market, newResult!.amount.toString(), symbol);
