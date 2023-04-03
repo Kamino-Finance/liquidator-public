@@ -4,12 +4,12 @@ import dotenv from 'dotenv';
 import { MarketConfigType } from '@hubbleprotocol/kamino-lending-sdk';
 import logger from 'services/logger';
 
-dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
+dotenv.config({ path: `.env.${process.env.CLUSTER}` });
 
 const eligibleApps = ['mainnet-beta', 'devnet'];
 
 function getApp() {
-  const app = process.env.APP;
+  const app = process.env.CLUSTER;
   if (!eligibleApps.includes(app!)) {
     throw new Error(
       `Unrecognized env app provided: ${app}. Must be mainnet-beta or devnet`,
@@ -19,7 +19,7 @@ function getApp() {
 }
 
 function getMarketsUrl(): string {
-  // Only fetch the targeted markets if specified. Otherwise we fetch all solend pools
+  // Only fetch the targeted markets if specified. Otherwise we fetch all kamino-lending markets
 
   const api = process.env.MARKET
     ? `https://api.kamino.finance//kamino-market/${process.env.MARKET}` : 'https://api.kamino.finance/kamino-market';

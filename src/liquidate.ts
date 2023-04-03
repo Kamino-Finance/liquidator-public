@@ -25,7 +25,7 @@ import { getAllObligationsForMarket } from 'models/layouts/obligation';
 import { getMarkets } from './config';
 import logger from './services/logger';
 
-dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
+dotenv.config({ path: `.env.${process.env.CLUSTER}` });
 const app = express();
 
 async function runLiquidator() {
@@ -40,7 +40,7 @@ async function runLiquidator() {
   // liquidator's keypair.
   const payer = Keypair.fromSecretKey(Buffer.from(JSON.parse(readSecret('keypair'))));
 
-  const cluster = process.env.NODE_ENV === 'mainnet-beta' ? 'mainnet-beta' : 'devnet';
+  const cluster = process.env.CLUSTER === 'mainnet-beta' ? 'mainnet-beta' : 'devnet';
   const jupiter = await Jupiter.load({
     connection,
     cluster,
@@ -51,7 +51,7 @@ async function runLiquidator() {
 
   logger.info({
     message: `Liquidator running against ${markets.length} pools`,
-    app: `${process.env.APP}`,
+    app: `${process.env.CLUSTER}`,
     rpc: `${rpcEndpoint}`,
     wallet: `${payer.publicKey.toBase58()}`,
     autoRebalancing: `${target.length > 0 ? 'ON' : 'OFF'}`,
@@ -64,7 +64,7 @@ async function runLiquidator() {
         connection,
         KAMINO_LENDING_DEVNET_PROGRAM_ID,
         market.lendingMarket,
-        process.env.APP as ENV,
+        process.env.CLUSTER as ENV,
       );
 
       const tokensOracle = await getTokensOracleData(connection, kaminoMarket);
@@ -73,7 +73,6 @@ async function runLiquidator() {
 
       logger.info(`Liquidator looping through ${allObligations.length} obligations for market: ${market.lendingMarket}`);
 
-      // TODO: Improve error handling & logging
       // eslint-disable-next-line prefer-const
       for (let { obligation, obligationAddress } of allObligations) {
         try {
@@ -85,6 +84,11 @@ async function runLiquidator() {
               kaminoMarket.reserves,
               tokensOracle,
             );
+
+            if (Number.isNaN(borrowedValue) || Number.isNaN(unhealthyBorrowValue)) {
+              logger.warn(`Obligation ${obligationAddress.toString()} has NaN values`);
+              break;
+            }
 
             // Do nothing if obligation is healthy
             if (borrowedValue.isLessThanOrEqualTo(unhealthyBorrowValue)) {
@@ -114,7 +118,8 @@ async function runLiquidator() {
             });
 
             if (!selectedBorrow || !selectedDeposit) {
-            // skip toxic obligations caused by toxic oracle data
+              logger.warn(`Skipping obligation ${obligationAddress.toString()} caused by toxic oracle data`);
+              // skip toxic obligations caused by toxic oracle data
               break;
             }
 
@@ -158,6 +163,8 @@ async function runLiquidator() {
 
             // Set super high liquidation amount which acts as u64::MAX as program will only liquidate max
             // 50% val of all borrowed assets.
+            logger.info(`Trying to liquidate obligation ${obligationAddress.toString()}, committing ${balanceBase} for liquidation`);
+
             await liquidateAndRedeem(
               connection,
               payer,
@@ -171,7 +178,6 @@ async function runLiquidator() {
             const postLiquidationObligation = await connection.getAccountInfo(
               new PublicKey(obligationAddress),
             );
-            // TODO: Why reassign?
             obligation = Obligation.decode(postLiquidationObligation?.data!);
           }
         } catch (err) {
@@ -207,11 +213,18 @@ app.get(['/health', '/health/liveness', '/health/readiness'], (req, res) => {
   res.send('ok');
 });
 
-runLiquidator()
-  .then(() => {
-    process.exit(0);
-  })
-  .catch((err) => {
-    logger.error(err);
-    process.exit(1);
-  });
+async function recursiveTryCatch(f: () => void) {
+  try {
+    f();
+  } catch (e) {
+    logger.error(e);
+    await sleep(500);
+    await recursiveTryCatch(f);
+  }
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+recursiveTryCatch(() => runLiquidator());

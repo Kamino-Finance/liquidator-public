@@ -7,13 +7,15 @@ const logger = createLogger({
   format: format.combine(format.errors({ stack: true }), format.splat(), format.json()),
   defaultMeta: { service: 'kamino-lending-liquidations-bot', session: sessionId },
   transports: [
-    process.env.NODE_ENV === 'mainnet-beta' ? new transports.Console({
-      format: format.combine(
-        format.colorize(),
-        format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-        format.simple(),
-      ),
-    }) : new transports.Console(),
+    process.env.NODE_ENV !== 'production'
+      ? new transports.Console({
+        format: format.combine(
+          format.colorize(),
+          format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+          format.simple(),
+        ),
+      })
+      : new transports.Console(),
   ],
 });
 

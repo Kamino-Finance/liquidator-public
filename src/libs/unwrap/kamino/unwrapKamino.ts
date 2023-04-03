@@ -8,7 +8,7 @@ import {
 import { getConfigByCluster, SolanaCluster } from '@hubbleprotocol/hubble-config';
 import logger from 'services/logger';
 
-const cluster = process.env.APP as SolanaCluster;
+const cluster = process.env.CLUSTER as SolanaCluster;
 
 export const checkAndUnwrapKaminoTokens = async (
   connection: Connection,

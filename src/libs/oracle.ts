@@ -11,11 +11,11 @@ import {
 import { SolanaCluster } from '@hubbleprotocol/hubble-config';
 import logger from 'services/logger';
 
-dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
+dotenv.config({ path: `.env.${process.env.CLUSTER}` });
 
 const NULL_ORACLE = 'nu11111111111111111111111111111111111111111';
-const SWITCHBOARD_V2_ADDRESS = process.env.APP === 'mainnet-beta' ? 'SW1TCH7qEPTdLsDHRgPuMQjbQxKdH2aBStViMFnt64f' : '2TfB33aLaneQb5TNVwyDz3jSZXS6jdW2ARw1Dgf84XCG';
-const SCOPE_ADDRESS = process.env.APP === 'mainnet-beta'
+const SWITCHBOARD_V2_ADDRESS = process.env.CLUSTER === 'mainnet-beta' ? 'SW1TCH7qEPTdLsDHRgPuMQjbQxKdH2aBStViMFnt64f' : '2TfB33aLaneQb5TNVwyDz3jSZXS6jdW2ARw1Dgf84XCG';
+const SCOPE_ADDRESS = process.env.CLUSTER === 'mainnet-beta'
   ? 'HFn8GnPADiny6XqUoWE8uRPPxb29ikn4yTuPa9MF2fWJ'
   : '3Vw8Ngkh1MVJTPHthmUbmU2XKtFEkjYvJzMqrv2rh9yX';
 
@@ -53,7 +53,7 @@ async function getTokenOracleData(connection: Connection, reserve: KaminoReserve
     const owner = info?.owner.toString();
     if (owner === SWITCHBOARD_V2_ADDRESS) {
       if (!switchboardV2) {
-        switchboardV2 = process.env.APP === 'mainnet-beta' ? await SwitchboardProgram.loadMainnet(connection) : await SwitchboardProgram.loadDevnet(connection);
+        switchboardV2 = process.env.CLUSTER === 'mainnet-beta' ? await SwitchboardProgram.loadMainnet(connection) : await SwitchboardProgram.loadDevnet(connection);
       }
       const result = switchboardV2.decodeLatestAggregatorValue(info!);
       price = result?.toNumber();
@@ -65,7 +65,7 @@ async function getTokenOracleData(connection: Connection, reserve: KaminoReserve
     const info = await connection.getAccountInfo(pricePublicKey);
     const owner = info?.owner.toString();
     if (owner === SCOPE_ADDRESS) {
-      const scope = new Scope(process.env.APP as SolanaCluster, connection);
+      const scope = new Scope(process.env.CLUSTER as SolanaCluster, connection);
       const result = await scope.getPriceByMint(reserve.config.liquidityToken.mint);
       price = result?.price.toNumber();
     } else {

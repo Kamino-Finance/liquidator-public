@@ -157,8 +157,8 @@ export const liquidateAndRedeem = async (
   tx.sign(payer);
 
   const txHash = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false });
+  logger.info(`Liquidation successful, tx signature, ${txHash.toString()}`);
   await connection.confirmTransaction(txHash, 'processed');
-  logger.info(`Liquidation went successfully, tx signature, ${txHash.toString()}`);
 
   const rewardedWithdrawCollateralBalanceAfter = await connection.getTokenAccountBalance(rewardedWithdrawalCollateralAccount);
   logger.info(`rewardedCollateralBalance after: ${rewardedWithdrawCollateralBalanceAfter.value.uiAmountString}`);

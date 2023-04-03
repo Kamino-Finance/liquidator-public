@@ -34,27 +34,27 @@ export function calculateRefreshedObligation(
     const { price, decimals, symbol } = tokenOracle;
     const reserve: KaminoReserve | undefined = find(reserves, (r: KaminoReserve) => r.config.address.toString() === deposit.depositReserve.toString());
 
-    if (!reserve) {
+    if (reserve && reserve.stats !== null) {
+      const { cTokenExchangeRate, loanToValueRatio, liquidationThreshold } = reserve!.stats!;
+      const marketValue = new BigNumber(deposit.depositedAmount.toString())
+        .multipliedBy(WAD)
+        .dividedBy(cTokenExchangeRate)
+        .multipliedBy(price)
+        .dividedBy(decimals);
+
+      depositedValue = depositedValue.plus(marketValue);
+      allowedBorrowValue = allowedBorrowValue.plus(marketValue.multipliedBy(loanToValueRatio));
+      unhealthyBorrowValue = unhealthyBorrowValue.plus(marketValue.multipliedBy(liquidationThreshold));
+
+      deposits.push({
+        depositReserve: deposit.depositReserve,
+        depositAmount: deposit.depositedAmount,
+        marketValue,
+        symbol,
+      });
+    } else {
       logger.error(`Missing reserve info for reserve ${deposit.depositReserve.toString()}, skipping this obligation.`);
     }
-
-    const { cTokenExchangeRate, loanToValueRatio, liquidationThreshold } = reserve!.stats!;
-    const marketValue = new BigNumber(deposit.depositedAmount.toString())
-      .multipliedBy(WAD)
-      .dividedBy(cTokenExchangeRate)
-      .multipliedBy(price)
-      .dividedBy(decimals);
-
-    depositedValue = depositedValue.plus(marketValue);
-    allowedBorrowValue = allowedBorrowValue.plus(marketValue.multipliedBy(loanToValueRatio));
-    unhealthyBorrowValue = unhealthyBorrowValue.plus(marketValue.multipliedBy(liquidationThreshold));
-
-    deposits.push({
-      depositReserve: deposit.depositReserve,
-      depositAmount: deposit.depositedAmount,
-      marketValue,
-      symbol,
-    });
   });
 
   obligation.borrows.filter((borrow: ObligationLiquidity) => borrow.borrowReserve.toBase58() !== PublicKey.default.toBase58() && borrow.borrowReserve.toBase58() !== NULL_PUBKEY).forEach((borrow: ObligationLiquidity) => {
@@ -70,30 +70,30 @@ export function calculateRefreshedObligation(
     } = tokenOracle;
     const reserve: KaminoReserve | undefined = find(reserves, (r: KaminoReserve) => r.config.address.toString() === borrow.borrowReserve.toString());
 
-    if (!reserve) {
+    if (reserve && reserve.stats !== null) {
+      const cumulativeBorrowRateWadsObligation = u192ToBN(borrow.cumulativeBorrowRateWads);
+      const borrowAmountWadsWithInterest = getBorrrowedAmountWadsWithInterest(
+        new BigNumber(reserve!.stats!.cumulativeBorrowRateWads.toString()),
+        new BigNumber(cumulativeBorrowRateWadsObligation.toString()),
+        borrowAmountWads,
+      );
+
+      const marketValue = borrowAmountWadsWithInterest
+        .multipliedBy(price)
+        .dividedBy(decimals);
+
+      borrowedValue = borrowedValue.plus(marketValue);
+
+      borrows.push({
+        borrowReserve: borrow.borrowReserve,
+        borrowAmountWads: borrow.borrowedAmountWads,
+        mintAddress,
+        marketValue,
+        symbol,
+      });
+    } else {
       logger.error(`Missing reserve info for reserve ${borrow.borrowReserve.toString()}, skipping this obligation. Please restart liquidator to fetch latest config from /v1/config.`);
     }
-
-    const cumulativeBorrowRateWadsObligation = u192ToBN(borrow.cumulativeBorrowRateWads);
-    const borrowAmountWadsWithInterest = getBorrrowedAmountWadsWithInterest(
-      new BigNumber(reserve!.stats!.cumulativeBorrowRateWads.toString()),
-      new BigNumber(cumulativeBorrowRateWadsObligation.toString()),
-      borrowAmountWads,
-    );
-
-    const marketValue = borrowAmountWadsWithInterest
-      .multipliedBy(price)
-      .dividedBy(decimals);
-
-    borrowedValue = borrowedValue.plus(marketValue);
-
-    borrows.push({
-      borrowReserve: borrow.borrowReserve,
-      borrowAmountWads: borrow.borrowedAmountWads,
-      mintAddress,
-      marketValue,
-      symbol,
-    });
   });
 
   let utilizationRatio = borrowedValue.dividedBy(depositedValue).multipliedBy(100).toNumber();
