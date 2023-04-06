@@ -85,11 +85,7 @@ export function getTokenInfoFromMarket(market: KaminoMarket, symbol: string) {
   if (!liquidityToken) {
     throw new Error(`Could not find ${symbol} in config.assets`);
   }
-  return {
-    symbol: liquidityToken.symbol,
-    decimals: liquidityToken.decimals,
-    mintAddress: liquidityToken.mint,
-  };
+  return liquidityToken;
 }
 
 export function wait(ms: number) {
@@ -174,7 +170,7 @@ export async function getWalletTokenData(connection: Connection, market: KaminoM
       const wsolBalance = await token.getAccountInfo(userTokenAccount);
       if (wsolBalance?.amount.toNumber() === 0) {
         const solBalance = await connection.getBalance(wallet.publicKey);
-        await createWSOLAccount(connection, wallet, solBalance / 2);
+        await createWSOLAccount(connection, wallet, Math.ceil(solBalance / 2));
       }
     }
     const newResult = await token.getAccountInfo(userTokenAccount);

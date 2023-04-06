@@ -8,16 +8,14 @@ import {
   Transaction,
   TransactionInstruction,
 } from '@solana/web3.js';
-import {
-  getTokenInfoFromMarket,
-} from 'libs/utils';
 import { map } from 'underscore';
 import {
-  ReserveConfigType, refreshReserve as refreshReserveInstruction, liquidateObligationAndRedeemReserveCollateral, refreshObligation as refreshObligationInstruction, KaminoMarket, KaminoReserve, Obligation,
+  refreshReserve as refreshReserveInstruction, liquidateObligationAndRedeemReserveCollateral, refreshObligation as refreshObligationInstruction, KaminoMarket, KaminoReserve, Obligation,
 } from '@hubbleprotocol/kamino-lending-sdk';
 import BN from 'bn.js';
 import { ObligationCollateral, ObligationLiquidity } from '@hubbleprotocol/kamino-lending-sdk/dist/types';
 import logger from 'services/logger';
+import { createAddExtraComputeUnitsTransaction } from 'libs/computeBudget';
 
 export const liquidateAndRedeem = async (
   connection: Connection,
@@ -28,7 +26,115 @@ export const liquidateAndRedeem = async (
   lendingMarket: KaminoMarket,
   obligation: KaminoObligation,
 ) => {
+  const tx = new Transaction();
+
+  const repayReserve = lendingMarket.reserves.find((res) => res.config.liquidityToken.symbol === repayTokenSymbol);
+  const withdrawReserve = lendingMarket.reserves.find((res) => res.config.liquidityToken.symbol === withdrawTokenSymbol);
+
+  if (!withdrawReserve || !repayReserve) {
+    throw new Error('Reserves are not identified');
+  }
+
+  const rewardedWithdrawalCollateralAccount = await Token.getAssociatedTokenAddress(
+    ASSOCIATED_TOKEN_PROGRAM_ID,
+    TOKEN_PROGRAM_ID,
+    new PublicKey(withdrawReserve.config.collateralMint),
+    payer.publicKey,
+  );
+  const rewardedWithdrawalLiquidityAccount = await Token.getAssociatedTokenAddress(
+    ASSOCIATED_TOKEN_PROGRAM_ID,
+    TOKEN_PROGRAM_ID,
+    new PublicKey(withdrawReserve.config.liquidityToken.mint),
+    payer.publicKey,
+  );
+
+  const preIxs = await createRewardWithdrawalAccounts(connection, payer, withdrawReserve, rewardedWithdrawalLiquidityAccount, rewardedWithdrawalCollateralAccount);
+  tx.add(...preIxs);
+
+  const ixs = await getLiquidationInstructions(payer, lendingMarket, obligation, repayReserve, withdrawReserve, rewardedWithdrawalLiquidityAccount, rewardedWithdrawalCollateralAccount, liquidityAmount);
+
+  tx.add(...ixs);
+  const { blockhash } = await connection.getLatestBlockhash();
+  tx.recentBlockhash = blockhash;
+  tx.feePayer = payer.publicKey;
+  tx.sign(payer);
+
+  const simulatedTx = await connection.simulateTransaction(tx);
+  logger.info('Simulated tx %o', simulatedTx);
+
+  const txHash = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false });
+  logger.info(`Liquidation successful, tx signature, ${txHash.toString()}`);
+  await connection.confirmTransaction(txHash, 'processed');
+
+  const rewardedWithdrawCollateralBalanceAfter = await connection.getTokenAccountBalance(rewardedWithdrawalCollateralAccount);
+  logger.info(`rewardedCollateralBalance after: ${rewardedWithdrawCollateralBalanceAfter.value.uiAmountString}`);
+
+  const rewardedWithdrawLiquidityBalanceAfter = await connection.getTokenAccountBalance(rewardedWithdrawalLiquidityAccount);
+  logger.info(`rewardedLiquidityBalance after: ${rewardedWithdrawLiquidityBalanceAfter.value.uiAmountString}`);
+};
+
+export async function createRewardWithdrawalAccounts(
+  connection: Connection,
+  payer: Keypair,
+  withdrawReserve: KaminoReserve,
+  rewardedWithdrawalLiquidityAccount: PublicKey,
+  rewardedWithdrawalCollateralAccount: PublicKey,
+) {
   const ixs: TransactionInstruction[] = [];
+  const rewardedWithdrawalCollateralAccountInfo = await connection.getAccountInfo(
+    rewardedWithdrawalCollateralAccount,
+  );
+
+  if (!rewardedWithdrawalCollateralAccountInfo) {
+    const createUserCollateralAccountIx = Token.createAssociatedTokenAccountInstruction(
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+      TOKEN_PROGRAM_ID,
+      new PublicKey(withdrawReserve.config.collateralMint),
+      rewardedWithdrawalCollateralAccount,
+      payer.publicKey,
+      payer.publicKey,
+    );
+    ixs.push(createUserCollateralAccountIx);
+  } else {
+    const rewardedWithdrawCollateralBalance = await connection.getTokenAccountBalance(rewardedWithdrawalCollateralAccount);
+    logger.info(`rewardedCollateralBalance before: ${rewardedWithdrawCollateralBalance.value.uiAmountString}`);
+  }
+
+  const rewardedWithdrawalLiquidityAccountInfo = await connection.getAccountInfo(
+    rewardedWithdrawalLiquidityAccount,
+  );
+  if (!rewardedWithdrawalLiquidityAccountInfo) {
+    const createUserCollateralAccountIx = Token.createAssociatedTokenAccountInstruction(
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+      TOKEN_PROGRAM_ID,
+      new PublicKey(withdrawReserve.config.liquidityToken.mint),
+      rewardedWithdrawalLiquidityAccount,
+      payer.publicKey,
+      payer.publicKey,
+    );
+    ixs.push(createUserCollateralAccountIx);
+  } else {
+    const rewardedWithdrawLiquidityBalance = await connection.getTokenAccountBalance(rewardedWithdrawalLiquidityAccount);
+    logger.info(`rewardedLiquidityBalance before: ${rewardedWithdrawLiquidityBalance.value.uiAmountString}`);
+  }
+
+  return ixs;
+}
+
+export const getLiquidationInstructions = async (
+  payer: Keypair,
+  lendingMarket: KaminoMarket,
+  obligation: KaminoObligation,
+  repayReserve: KaminoReserve,
+  withdrawReserve: KaminoReserve,
+  rewardedWithdrawalLiquidityAccount: PublicKey,
+  rewardedWithdrawalCollateralAccount: PublicKey,
+  liquidityAmount: number | string,
+): Promise<TransactionInstruction[]> => {
+  const ixs: TransactionInstruction[] = [];
+
+  ixs.push(createAddExtraComputeUnitsTransaction(payer.publicKey, 600_000));
+
   const depositReserves = obligation.info.deposits.filter((deposit: ObligationCollateral) => deposit.depositReserve.toString() !== PublicKey.default.toString()).map((deposit: ObligationCollateral) => deposit.depositReserve);
   const borrowReserves = obligation.info.borrows.filter((borrow: ObligationLiquidity) => borrow.borrowReserve.toString() !== PublicKey.default.toString()).map((borrow: ObligationLiquidity) => borrow.borrowReserve);
 
@@ -59,73 +165,13 @@ export const liquidateAndRedeem = async (
   );
   ixs.push(refreshObligationIx);
 
-  const repayTokenInfo = getTokenInfoFromMarket(lendingMarket, repayTokenSymbol);
-
   // get account that will be repaying the reserve liquidity
   const repayAccount = await Token.getAssociatedTokenAddress(
     ASSOCIATED_TOKEN_PROGRAM_ID,
     TOKEN_PROGRAM_ID,
-    new PublicKey(repayTokenInfo.mintAddress),
+    new PublicKey(repayReserve.config.liquidityToken.mint),
     payer.publicKey,
   );
-
-  const reserveSymbolToReserveMap = new Map<string, ReserveConfigType>(
-    lendingMarket.reserves.map((reserve) => [reserve.config.liquidityToken.symbol, reserve.config]),
-  );
-
-  const repayReserve: ReserveConfigType | undefined = reserveSymbolToReserveMap.get(repayTokenSymbol);
-  const withdrawReserve: ReserveConfigType | undefined = reserveSymbolToReserveMap.get(withdrawTokenSymbol);
-  const withdrawTokenInfo = getTokenInfoFromMarket(lendingMarket, withdrawTokenSymbol);
-
-  if (!withdrawReserve || !repayReserve) {
-    throw new Error('reserves are not identified');
-  }
-
-  const rewardedWithdrawalCollateralAccount = await Token.getAssociatedTokenAddress(
-    ASSOCIATED_TOKEN_PROGRAM_ID,
-    TOKEN_PROGRAM_ID,
-    new PublicKey(withdrawReserve.collateralMint),
-    payer.publicKey,
-  );
-  const rewardedWithdrawalCollateralAccountInfo = await connection.getAccountInfo(
-    rewardedWithdrawalCollateralAccount,
-  );
-  if (!rewardedWithdrawalCollateralAccountInfo) {
-    const createUserCollateralAccountIx = Token.createAssociatedTokenAccountInstruction(
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-      TOKEN_PROGRAM_ID,
-      new PublicKey(withdrawReserve.collateralMint),
-      rewardedWithdrawalCollateralAccount,
-      payer.publicKey,
-      payer.publicKey,
-    );
-    ixs.push(createUserCollateralAccountIx);
-  }
-  const rewardedWithdrawCollateralBalance = await connection.getTokenAccountBalance(rewardedWithdrawalCollateralAccount);
-  logger.info(`rewardedCollateralBalance before: ${rewardedWithdrawCollateralBalance.value.uiAmountString}`);
-
-  const rewardedWithdrawalLiquidityAccount = await Token.getAssociatedTokenAddress(
-    ASSOCIATED_TOKEN_PROGRAM_ID,
-    TOKEN_PROGRAM_ID,
-    new PublicKey(withdrawTokenInfo.mintAddress),
-    payer.publicKey,
-  );
-  const rewardedWithdrawalLiquidityAccountInfo = await connection.getAccountInfo(
-    rewardedWithdrawalLiquidityAccount,
-  );
-  if (!rewardedWithdrawalLiquidityAccountInfo) {
-    const createUserCollateralAccountIx = Token.createAssociatedTokenAccountInstruction(
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-      TOKEN_PROGRAM_ID,
-      new PublicKey(withdrawTokenInfo.mintAddress),
-      rewardedWithdrawalLiquidityAccount,
-      payer.publicKey,
-      payer.publicKey,
-    );
-    ixs.push(createUserCollateralAccountIx);
-  }
-  const rewardedWithdrawLiquidityBalance = await connection.getTokenAccountBalance(rewardedWithdrawalLiquidityAccount);
-  logger.info(`rewardedLiquidityBalance before: ${rewardedWithdrawLiquidityBalance.value.uiAmountString}`);
 
   ixs.push(
     liquidateObligationAndRedeemReserveCollateral({
@@ -135,13 +181,13 @@ export const liquidateAndRedeem = async (
       userSourceLiquidity: repayAccount,
       userDestinationCollateral: rewardedWithdrawalCollateralAccount,
       userDestinationLiquidity: rewardedWithdrawalLiquidityAccount,
-      repayReserve: new PublicKey(repayReserve.address),
-      repayReserveLiquiditySupply: new PublicKey(repayReserve.liquiditySupply),
-      withdrawReserve: new PublicKey(withdrawReserve.address),
-      withdrawReserveCollateralMint: new PublicKey(withdrawReserve.collateralMint),
-      withdrawReserveCollateralSupply: new PublicKey(withdrawReserve.collateralSupply),
-      withdrawReserveLiquiditySupply: new PublicKey(withdrawReserve.liquiditySupply),
-      withdrawReserveLiquidityFeeReceiver: new PublicKey(withdrawReserve.liquidityFeeReceiver),
+      repayReserve: new PublicKey(repayReserve.config.address),
+      repayReserveLiquiditySupply: new PublicKey(repayReserve.config.liquiditySupply),
+      withdrawReserve: new PublicKey(withdrawReserve.config.address),
+      withdrawReserveCollateralMint: new PublicKey(withdrawReserve.config.collateralMint),
+      withdrawReserveCollateralSupply: new PublicKey(withdrawReserve.config.collateralSupply),
+      withdrawReserveLiquiditySupply: new PublicKey(withdrawReserve.config.liquiditySupply),
+      withdrawReserveLiquidityFeeReceiver: new PublicKey(withdrawReserve.config.liquidityFeeReceiver),
       obligation: obligation.pubkey,
       lendingMarket: new PublicKey(lendingMarket.config.lendingMarket),
       lendingMarketAuthority: new PublicKey(lendingMarket.config.lendingMarketAuthority),
@@ -150,21 +196,7 @@ export const liquidateAndRedeem = async (
     }),
   );
 
-  const tx = new Transaction().add(...ixs);
-  const { blockhash } = await connection.getLatestBlockhash();
-  tx.recentBlockhash = blockhash;
-  tx.feePayer = payer.publicKey;
-  tx.sign(payer);
-
-  const txHash = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false });
-  logger.info(`Liquidation successful, tx signature, ${txHash.toString()}`);
-  await connection.confirmTransaction(txHash, 'processed');
-
-  const rewardedWithdrawCollateralBalanceAfter = await connection.getTokenAccountBalance(rewardedWithdrawalCollateralAccount);
-  logger.info(`rewardedCollateralBalance after: ${rewardedWithdrawCollateralBalanceAfter.value.uiAmountString}`);
-
-  const rewardedWithdrawLiquidityBalanceAfter = await connection.getTokenAccountBalance(rewardedWithdrawalLiquidityAccount);
-  logger.info(`rewardedLiquidityBalance after: ${rewardedWithdrawLiquidityBalanceAfter.value.uiAmountString}`);
+  return ixs;
 };
 
 export type KaminoObligation = {

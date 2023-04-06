@@ -163,7 +163,7 @@ async function runLiquidator() {
 
             // Set super high liquidation amount which acts as u64::MAX as program will only liquidate max
             // 50% val of all borrowed assets.
-            logger.info(`Trying to liquidate obligation ${obligationAddress.toString()}, committing ${balanceBase} for liquidation`);
+            logger.info(`Trying to liquidate obligation ${obligationAddress.toString()}, committing ${balanceBase} for liquidation, repaying token ${selectedBorrow.symbol} and withdrawing collateral token ${selectedDeposit.symbol}`);
 
             await liquidateAndRedeem(
               connection,

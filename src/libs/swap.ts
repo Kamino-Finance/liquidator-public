@@ -10,8 +10,12 @@ const SLIPPAGE = 2;
 const SWAP_TIMEOUT_SEC = 20;
 
 export default async function swap(connection: Connection, wallet: Keypair, jupiter: Jupiter, fromTokenInfo: TokenInfo, toTokenInfo: TokenInfo, amount: number) {
-  const swapAmount = Math.min(amount, fromTokenInfo.balance);
+  const swapAmount = Math.min(amount, fromTokenInfo.balance * fromTokenInfo.decimals);
   logger.info(`Swapping ${swapAmount} ${fromTokenInfo.symbol} to ${toTokenInfo.symbol}...`);
+
+  if (swapAmount === 0) {
+    logger.error(`No ${fromTokenInfo.symbol} left to swap for desired amount ${toTokenInfo.symbol}. Fund your wallet balance to continue or change the target balance for ${toTokenInfo.symbol} .}`);
+  }
 
   const inputMint = new PublicKey(fromTokenInfo.mintAddress);
   const outputMint = new PublicKey(toTokenInfo.mintAddress);
